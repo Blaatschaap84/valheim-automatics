@@ -19,7 +19,6 @@ namespace Automatics.AutomaticProcessing
             var sapItem = sapCollector.m_spawnItem;
             var sapData = sapItem.m_itemData.m_shared;
             var sapName = sapData.m_name;
-            var worldLevel = sapItem.m_itemData.m_worldLevel;
 
             var maxProductStacks = Config.ProductStacksOfSuppressProcessing(sapCollectorName);
             var origin = sapCollector.transform.position;
@@ -30,24 +29,18 @@ namespace Automatics.AutomaticProcessing
 
                 var inventory = container.GetInventory();
 
-                var sapCountInContainer = inventory.CountItems(sapName);
-                var amount = sapRemaining;
-                var stacks = sapCountInContainer / sapData.m_maxStackSize;
-
-                if (maxProductStacks > 0)
-                {
-                    if (stacks >= maxProductStacks) continue;
-                    var freeStackSpace = inventory.FindFreeStackSpace(sapName, worldLevel);
-                    if (freeStackSpace == 0) continue;
-                    amount = Mathf.Min(amount, freeStackSpace);
-                }
+                var amount = Logics.GetProductStackLimitedAmount(inventory, sapName,
+                    sapData.m_maxStackSize, maxProductStacks, sapRemaining);
+                if (amount <= 0) continue;
 
                 if (Config.StoreOnlyIfProductExists(sapCollectorName) &&
                     !Inventories.HaveItem(inventory, sapName, 0, WorldLevelMatchMode.Ignore, 1)) continue;
                 if (!Logics.TryClaimContainer(container)) continue;
-                if (!inventory.AddItem(sapItem.gameObject, amount)) continue;
 
-                var storedSapCount = inventory.CountItems(sapName) - sapCountInContainer;
+                var storedSapCount = Logics.AddItemAndGetCountDelta(inventory,
+                    sapItem.gameObject, sapName, amount);
+                if (storedSapCount <= 0) continue;
+
                 Logics.StoreLog(sapName, storedSapCount, container.m_name,
                     container.transform.position, sapCollectorName, origin);
                 sapRemaining -= storedSapCount;

@@ -98,9 +98,11 @@ namespace Automatics.AutomaticProcessing
                 {
                     if (!Logics.TryClaimContainer(materialContainer)) continue;
 
-                    var item = materialContainer.GetInventory().GetItem(materialData.m_name);
-                    materialContainer.GetInventory().RemoveOneItem(item);
-                    zNetView.InvokeRPC("RPC_AddItem", item.m_dropPrefab.name);
+                    var inventory = materialContainer.GetInventory();
+                    if (!Logics.TryRemoveItem(inventory, materialData.m_name, minMaterialCount,
+                            out var prefabName))
+                        continue;
+                    zNetView.InvokeRPC("RPC_AddItem", prefabName);
 
                     Logics.CraftingLog(materialData.m_name, 1,
                         materialContainer.m_name, materialContainer.transform.position, stationName,
@@ -135,7 +137,7 @@ namespace Automatics.AutomaticProcessing
                 if (!Inventories.HaveItem(inventory, fuelName, 0, WorldLevelMatchMode.Ignore, minFuelCount + 1)) continue;
                 if (!Logics.TryClaimContainer(container)) continue;
 
-                inventory.RemoveItem(fuelName, 1);
+                if (!Logics.TryRemoveItem(inventory, fuelName, minFuelCount, out _)) continue;
                 fuel += 1f;
                 cookingStation.m_fuelAddedEffects.Create(origin, transform.rotation, transform);
 
@@ -167,14 +169,16 @@ namespace Automatics.AutomaticProcessing
                 if (Config.StoreOnlyIfProductExists(stationName) &&
                     !Inventories.HaveItem(inventory, itemName, 0, WorldLevelMatchMode.Ignore, 1)) continue;
                 if (!Logics.TryClaimContainer(container)) continue;
-                if (!inventory.AddItem(item.gameObject, 1)) continue;
+                var storedItemCount =
+                    Logics.AddItemAndGetCountDelta(inventory, item.gameObject, itemName, 1);
+                if (storedItemCount <= 0) continue;
 
                 zNetView.GetZDO().Set("slot" + slot, "");
                 zNetView.GetZDO().Set("slot" + slot, 0f);
                 zNetView.GetZDO().Set("slotstatus" + slot, 0);
                 zNetView.InvokeRPC(ZNetView.Everybody, "RPC_SetSlotVisual", slot, "");
 
-                Logics.StoreLog(itemName, 1, container.m_name,
+                Logics.StoreLog(itemName, storedItemCount, container.m_name,
                     container.transform.position, stationName, origin);
                 return true;
             }

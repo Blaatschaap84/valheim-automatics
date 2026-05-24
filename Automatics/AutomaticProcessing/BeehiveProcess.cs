@@ -19,7 +19,6 @@ namespace Automatics.AutomaticProcessing
             var honeyItem = beehive.m_honeyItem;
             var honeyData = honeyItem.m_itemData.m_shared;
             var honeyName = honeyData.m_name;
-            var worldLevel = honeyItem.m_itemData.m_worldLevel;
 
             var maxProductStacks = Config.ProductStacksOfSuppressProcessing(beehiveName);
             var origin = beehive.transform.position;
@@ -30,24 +29,18 @@ namespace Automatics.AutomaticProcessing
 
                 var inventory = container.GetInventory();
 
-                var honeyCountInContainer = inventory.CountItems(honeyName);
-                var amount = honeyRemaining;
-                var stacks = honeyCountInContainer / honeyData.m_maxStackSize;
-
-                if (maxProductStacks > 0)
-                {
-                    if (stacks >= maxProductStacks) continue;
-                    var freeStackSpace = inventory.FindFreeStackSpace(honeyName, worldLevel);
-                    if (freeStackSpace == 0) continue;
-                    amount = Mathf.Min(amount, freeStackSpace);
-                }
+                var amount = Logics.GetProductStackLimitedAmount(inventory, honeyName,
+                    honeyData.m_maxStackSize, maxProductStacks, honeyRemaining);
+                if (amount <= 0) continue;
 
                 if (Config.StoreOnlyIfProductExists(beehiveName) &&
                     !Inventories.HaveItem(inventory, honeyName, 0, WorldLevelMatchMode.Ignore, 1)) continue;
                 if (!Logics.TryClaimContainer(container)) continue;
-                if (!inventory.AddItem(honeyItem.gameObject, amount)) continue;
 
-                var storedHoneyCount = inventory.CountItems(honeyName) - honeyCountInContainer;
+                var storedHoneyCount = Logics.AddItemAndGetCountDelta(inventory,
+                    honeyItem.gameObject, honeyName, amount);
+                if (storedHoneyCount <= 0) continue;
+
                 Logics.StoreLog(honeyName, storedHoneyCount, container.m_name,
                     container.transform.position, beehiveName, origin);
                 honeyRemaining -= storedHoneyCount;

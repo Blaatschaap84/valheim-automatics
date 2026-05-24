@@ -30,7 +30,7 @@ namespace Automatics.AutomaticProcessing
                 if (!Inventories.HaveItem(inventory, fuelName, 0, WorldLevelMatchMode.Ignore, minFuelCount + 1)) continue;
                 if (!Logics.TryClaimContainer(container)) continue;
 
-                inventory.RemoveItem(fuelName, 1);
+                if (!Logics.TryRemoveItem(inventory, fuelName, minFuelCount, out _)) continue;
                 zNetView.InvokeRPC("RPC_AddFuel");
 
                 Logics.RefuelLog(fuelName, 1, fireplaceName, origin, container.m_name,

@@ -71,9 +71,11 @@ namespace Automatics.AutomaticProcessing
                 {
                     if (!Logics.TryClaimContainer(materialContainer)) continue;
 
-                    var item = materialContainer.GetInventory().GetItem(materialData.m_name);
-                    materialContainer.GetInventory().RemoveOneItem(item);
-                    zNetView.InvokeRPC("RPC_AddItem", item.m_dropPrefab.name);
+                    var inventory = materialContainer.GetInventory();
+                    if (!Logics.TryRemoveItem(inventory, materialData.m_name, minMaterialCount,
+                            out var prefabName))
+                        continue;
+                    zNetView.InvokeRPC("RPC_AddItem", prefabName);
 
                     Logics.CraftingLog(materialData.m_name, 1,
                         materialContainer.m_name, materialContainer.transform.position,
@@ -109,13 +111,14 @@ namespace Automatics.AutomaticProcessing
                 if (productRemaining <= 0) break;
 
                 var inventory = container.GetInventory();
-                var itemCountBefore = inventory.CountItems(itemName);
                 if (Config.StoreOnlyIfProductExists(fermenterName) &&
                     !Inventories.HaveItem(inventory, itemName, 0, WorldLevelMatchMode.Ignore, 1)) continue;
                 if (!Logics.TryClaimContainer(container)) continue;
-                if (!inventory.AddItem(item.gameObject, productRemaining)) continue;
 
-                var storedItemCount = inventory.CountItems(itemName) - itemCountBefore;
+                var storedItemCount = Logics.AddItemAndGetCountDelta(inventory, item.gameObject,
+                    itemName, productRemaining);
+                if (storedItemCount <= 0) continue;
+
                 Logics.StoreLog(itemName, storedItemCount, container.m_name,
                     container.transform.position, fermenterName, origin);
                 productRemaining -= storedItemCount;

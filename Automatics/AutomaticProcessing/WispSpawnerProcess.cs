@@ -23,7 +23,6 @@ namespace Automatics.AutomaticProcessing
 
             var wispData = wispItem.m_itemData.m_shared;
             var wispName = wispData.m_name;
-            var worldLevel = wispItem.m_itemData.m_worldLevel;
 
             var maxProductStacks = Config.ProductStacksOfSuppressProcessing(wispSpawnerName);
             var origin = wispSpawner.transform.position;
@@ -31,24 +30,20 @@ namespace Automatics.AutomaticProcessing
             {
                 var inventory = container.GetInventory();
 
-                var wispCountInContainer = inventory.CountItems(wispName);
-                var stacks = wispCountInContainer / wispData.m_maxStackSize;
-
-                if (maxProductStacks > 0)
-                {
-                    if (stacks >= maxProductStacks) continue;
-                    var freeStackSpace = inventory.FindFreeStackSpace(wispName, worldLevel);
-                    if (freeStackSpace == 0) continue;
-                }
+                var amount = Logics.GetProductStackLimitedAmount(inventory, wispName,
+                    wispData.m_maxStackSize, maxProductStacks, 1);
+                if (amount <= 0) continue;
 
                 if (Config.StoreOnlyIfProductExists(wispSpawnerName) &&
                     !Inventories.HaveItem(inventory, wispName, 0, WorldLevelMatchMode.Ignore, 1)) continue;
                 if (!Logics.TryClaimContainer(container)) continue;
-                if (!inventory.AddItem(wispItem.gameObject, 1)) continue;
+                var storedItemCount =
+                    Logics.AddItemAndGetCountDelta(inventory, wispItem.gameObject, wispName, 1);
+                if (storedItemCount <= 0) continue;
 
                 zNetView.GetZDO().Set("LastSpawn", ZNet.instance.GetTime().Ticks);
-                Logics.StoreLog(wispName, 1, container.m_name, container.transform.position,
-                    wispSpawnerName, origin);
+                Logics.StoreLog(wispName, storedItemCount, container.m_name,
+                    container.transform.position, wispSpawnerName, origin);
                 return true;
             }
 

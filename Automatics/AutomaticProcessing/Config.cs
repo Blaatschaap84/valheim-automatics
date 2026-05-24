@@ -178,15 +178,18 @@ namespace Automatics.AutomaticProcessing
                         config.Bind(key, 1, (0, 999),
                             Initializer("material_count_of_suppress_processing", displayName));
 
-                    key = $"{rawName}_product_stacks_of_suppress_processing";
-                    _productStacksOfSuppressProcessing[processorName] =
-                        config.Bind(key, 0, (0, 99),
-                            Initializer("product_stacks_of_suppress_processing", displayName));
-
                     key = $"{rawName}_supply_only_when_materials_run_out";
                     _supplyOnlyWhenMaterialsRunOut[processorName] =
                         config.Bind(key, false,
                             initializer: Initializer("supply_only_when_materials_run_out", displayName));
+                }
+
+                if (processes.Contains(Process.Craft) || processes.Contains(Process.Store))
+                {
+                    key = $"{rawName}_product_stacks_of_suppress_processing";
+                    _productStacksOfSuppressProcessing[processorName] =
+                        config.Bind(key, 0, (0, 99),
+                            Initializer("product_stacks_of_suppress_processing", displayName));
                 }
 
                 if (processes.Contains(Process.Refuel))

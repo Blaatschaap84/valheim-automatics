@@ -96,6 +96,55 @@ namespace Automatics.AutomaticProcessing
             return true;
         }
 
+        public static bool TryRemoveItem(Inventory inventory, string itemName, int minCount,
+            out string prefabName)
+        {
+            prefabName = null;
+            if (inventory == null || string.IsNullOrEmpty(itemName)) return false;
+
+            if (!Inventories.HaveItem(inventory, itemName, 0, WorldLevelMatchMode.Ignore,
+                    minCount + 1))
+                return false;
+
+            foreach (var item in Inventories.GetItems(inventory, itemName, 0,
+                         WorldLevelMatchMode.Ignore))
+                if (TryRemoveItem(inventory, item, out prefabName))
+                    return true;
+
+            return false;
+        }
+
+        public static bool TryRemoveItem(Inventory inventory, ItemDrop.ItemData item,
+            out string prefabName)
+        {
+            prefabName = null;
+            if (inventory == null || item == null || item.m_dropPrefab == null) return false;
+
+            prefabName = item.m_dropPrefab.name;
+            return inventory.RemoveItem(item, 1);
+        }
+
+        public static int AddItemAndGetCountDelta(Inventory inventory, GameObject prefab,
+            string itemName, int amount)
+        {
+            if (inventory == null || prefab == null || amount <= 0) return 0;
+
+            var itemCountBefore = inventory.CountItems(itemName);
+            inventory.AddItem(prefab, amount);
+            return Mathf.Max(0, inventory.CountItems(itemName) - itemCountBefore);
+        }
+
+        public static int GetProductStackLimitedAmount(Inventory inventory, string itemName,
+            int maxStackSize, int maxProductStacks, int amount)
+        {
+            if (inventory == null || amount <= 0) return 0;
+            if (maxProductStacks <= 0) return amount;
+
+            var maxProductCount = maxProductStacks * Mathf.Max(1, maxStackSize);
+            var remainingCapacity = maxProductCount - inventory.CountItems(itemName);
+            return Mathf.Clamp(remainingCapacity, 0, amount);
+        }
+
         public static IEnumerable<(Container container, float distance)> GetNearbyContainers(
             string target, Vector3 origin)
         {

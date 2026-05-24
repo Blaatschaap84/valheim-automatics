@@ -100,10 +100,12 @@ namespace Automatics.AutomaticProcessing
                 {
                     if (!Logics.TryClaimContainer(materialContainer)) continue;
 
-                    var item = materialContainer.GetInventory().GetItem(materialData.m_name);
-                    materialContainer.GetInventory().RemoveOneItem(item);
+                    var inventory = materialContainer.GetInventory();
+                    if (!Logics.TryRemoveItem(inventory, materialData.m_name, minMaterialCount,
+                            out var prefabName))
+                        continue;
 
-                    Reflections.InvokeMethod(smelter, "QueueOre", item.m_dropPrefab.name);
+                    Reflections.InvokeMethod(smelter, "QueueOre", prefabName);
 
                     Logics.CraftingLog(materialData.m_name, 1,
                         materialContainer.m_name, materialContainer.transform.position, smelterName,
@@ -200,9 +202,11 @@ namespace Automatics.AutomaticProcessing
                 {
                     if (!Logics.TryClaimContainer(materialContainer)) continue;
 
-                    var item = materialContainer.GetInventory().GetItem(materialData.m_name);
-                    materialContainer.GetInventory().RemoveOneItem(item);
-                    zNetView.InvokeRPC("RPC_AddOre", item.m_dropPrefab.name);
+                    var inventory = materialContainer.GetInventory();
+                    if (!Logics.TryRemoveItem(inventory, materialData.m_name, minMaterialCount,
+                            out var prefabName))
+                        continue;
+                    zNetView.InvokeRPC("RPC_AddOre", prefabName);
 
                     Logics.CraftingLog(materialData.m_name, 1,
                         materialContainer.m_name, materialContainer.transform.position, smelterName,
@@ -250,7 +254,7 @@ namespace Automatics.AutomaticProcessing
                 if (!Inventories.HaveItem(inventory, fuelName, 0, WorldLevelMatchMode.Ignore, minFuelCount + 1)) continue;
                 if (!Logics.TryClaimContainer(container)) continue;
 
-                container.GetInventory().RemoveItem(fuelName, 1);
+                if (!Logics.TryRemoveItem(inventory, fuelName, minFuelCount, out _)) continue;
                 zNetView.InvokeRPC("RPC_AddFuel");
 
                 Logics.RefuelLog(fuelName, 1, smelterName, origin, container.m_name,
@@ -302,7 +306,7 @@ namespace Automatics.AutomaticProcessing
                 if (!Inventories.HaveItem(inventory, fuelName, 0, WorldLevelMatchMode.Ignore, minFuelCount + 1)) continue;
                 if (!Logics.TryClaimContainer(container)) continue;
 
-                container.GetInventory().RemoveItem(fuelName, 1);
+                if (!Logics.TryRemoveItem(inventory, fuelName, minFuelCount, out _)) continue;
                 zNetView.InvokeRPC("RPC_AddFuel");
 
                 Logics.RefuelLog(fuelName, 1, smelterName, origin, container.m_name,
@@ -333,13 +337,14 @@ namespace Automatics.AutomaticProcessing
                 if (productRemaining <= 0) break;
 
                 var inventory = container.GetInventory();
-                var itemCountBefore = inventory.CountItems(itemName);
                 if (Config.StoreOnlyIfProductExists(smelterName) &&
                     !Inventories.HaveItem(inventory, itemName, 0, WorldLevelMatchMode.Ignore, 1)) continue;
                 if (!Logics.TryClaimContainer(container)) continue;
-                if (!inventory.AddItem(item.gameObject, stack)) continue;
 
-                var storedItemCount = inventory.CountItems(itemName) - itemCountBefore;
+                var storedItemCount = Logics.AddItemAndGetCountDelta(inventory, item.gameObject,
+                    itemName, productRemaining);
+                if (storedItemCount <= 0) continue;
+
                 Logics.StoreLog(itemName, storedItemCount, container.m_name,
                     container.transform.position, smelterName, origin);
                 productRemaining -= storedItemCount;

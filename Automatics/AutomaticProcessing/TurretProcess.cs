@@ -72,8 +72,8 @@ namespace Automatics.AutomaticProcessing
                     continue;
                 if (!Logics.TryClaimContainer(container)) continue;
 
-                inventory.RemoveItem(item, 1);
-                zNetView.InvokeRPC("RPC_AddAmmo", item.m_dropPrefab.name);
+                if (!Logics.TryRemoveItem(inventory, item, out var prefabName)) continue;
+                zNetView.InvokeRPC("RPC_AddAmmo", prefabName);
 
                 Logics.ChargeLog(item.m_shared.m_name, 1, turretName, origin, container.m_name,
                     container.transform.position);
