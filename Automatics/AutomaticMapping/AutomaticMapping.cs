@@ -965,11 +965,6 @@ namespace Automatics.AutomaticMapping
             return false;
         }
 
-        private static void RemoveCache(Minimap.PinData pinData)
-        {
-            RemovePinFromCache(pinData);
-        }
-
         [UsedImplicitly]
         public static void OnObjectDestroy(Component component, ZNetView zNetView)
         {
@@ -981,77 +976,41 @@ namespace Automatics.AutomaticMapping
             {
                 if (!Config.EnableAutomaticMapping) return;
                 if (!Config.RemovePinsOfDestroyedObject) return;
-                if (!zNetView.IsValid() || !zNetView.IsOwner()) return;
+                if (zNetView == null || !zNetView.IsValid() || !zNetView.IsOwner()) return;
+                if (!Objects.GetZdoid(component, out var uniqueId)) return;
 
-                Minimap.PinData pinData = null;
+                var identify = new MapPinIdentify(uniqueId);
                 var name = Objects.GetName(component);
                 if (GetFlora(name, out var data))
                 {
                     if (!data.IsAllowed) return;
 
                     var node = component.GetComponent<FloraNode>();
-                    if (!node)
-                        pinData = Map.RemovePin(component.transform.position);
-                    else if (node.Network.NodeCount <= 1)
-                        pinData = Map.RemovePin(node.Network.Center);
+                    if (!node || node.Network == null || node.Network.NodeCount <= 1)
+                        RemoveOwnedPinIfSingleLiveFloraOwner(identify);
                 }
                 else if (GetMineral(name, out data))
                 {
                     if (!data.IsAllowed) return;
-                    pinData = Map.RemovePin(GetMineralRemovalCenter(component));
+                    RemoveOwnedPin(identify);
                 }
                 else if (GetSpawner(name, out data) ||
                          GetOther(name, out data))
                 {
                     if (!data.IsAllowed) return;
-                    pinData = Map.RemovePin(component.transform.position);
+                    RemoveOwnedPin(identify);
                 }
-
-                if (pinData != null)
-                    RemoveCache(pinData);
+                else if (component.GetComponent<TeleportWorld>())
+                {
+                    if (!Config.AllowPinningPortal) return;
+                    RemoveOwnedPin(identify);
+                }
             }
             finally
             {
                 if (component is MineRock5 rock5)
                     MineRock5Cache.Unregister(rock5);
             }
-        }
-
-        // MineRock5 returns the Awake-time snapshot center so we do not
-        // average live bounds after DamageArea has deactivated the hit
-        // areas; for MineRock / Destructible the live-bounds path is
-        // unchanged because their colliders remain active until the
-        // ZNetView is destroyed.
-        private static Vector3 GetMineralRemovalCenter(Component component)
-        {
-            if (component is MineRock5 rock5 &&
-                MineRock5Cache.TryGetSnapshot(rock5, out var snapshot) &&
-                snapshot.ColliderCount > 0)
-                return snapshot.Center;
-
-            var empty = Array.Empty<Collider>();
-            IReadOnlyCollection<Collider> colliders;
-            switch (component)
-            {
-                case MineRock rock:
-                    colliders = Reflections.GetField<Collider[]>(rock, "m_hitAreas") ?? empty;
-                    break;
-                case Destructible destructible:
-                {
-                    var collider = destructible.GetComponentInChildren<Collider>();
-                    colliders = collider ? new[] { collider } : empty;
-                    break;
-                }
-                default:
-                    colliders = empty;
-                    break;
-            }
-
-            if (colliders.Count == 0) return component.transform.position;
-
-            var sum = colliders.Aggregate(Vector3.zero,
-                (current, collider) => current + collider.bounds.center);
-            return sum / colliders.Count;
         }
 
         public static void Cleanup()
@@ -2285,12 +2244,8 @@ namespace Automatics.AutomaticMapping
             }
 
             var pos = component.transform.position;
-            pinData = Map.GetClosestPin(pos);
-            if (pinData == null)
-                AddPin(uniqueId, pos, pinName, true, CreateTarget(component.gameObject, name),
-                    PinKind.Portal, string.Empty, name, PinSourceDomain.Component);
-            else
-                pinData.m_name = pinName;
+            AddPin(uniqueId, pos, pinName, true, CreateTarget(component.gameObject, name),
+                PinKind.Portal, string.Empty, name, PinSourceDomain.Component);
 
             return true;
         }
@@ -2450,6 +2405,31 @@ namespace Automatics.AutomaticMapping
 
             pinData = null;
             return false;
+        }
+
+        private static Minimap.PinData RemoveOwnedPin(MapPinIdentify identify)
+        {
+            if (!TryGetCachedPin(identify, out var pinData)) return null;
+
+            RemovePinFromCache(pinData);
+            return Map.RemovePin(pinData) ?? pinData;
+        }
+
+        private static Minimap.PinData RemoveOwnedPinIfSingleLiveFloraOwner(
+            MapPinIdentify identify)
+        {
+            if (!TryGetCachedPin(identify, out var pinData)) return null;
+            if (!PinKeyCache.TryGetValue(pinData, out var keys)) return RemoveOwnedPin(identify);
+
+            var liveOwnerCount = 0;
+            foreach (var key in keys)
+            {
+                if (!key.IsUniqueId() || FloraNode.Find(key.UniqueId) != null)
+                    liveOwnerCount++;
+                if (liveOwnerCount > 1) return null;
+            }
+
+            return RemoveOwnedPin(identify);
         }
 
         private static void CachePin(IEnumerable<FloraNode> nodes, Minimap.PinData pinData,

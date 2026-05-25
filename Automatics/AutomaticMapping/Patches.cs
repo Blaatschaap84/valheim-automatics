@@ -397,11 +397,7 @@ namespace Automatics.AutomaticMapping
             var portal = __instance.GetComponent<WearNTear>();
             if (portal)
                 portal.m_onDestroyed += () =>
-                {
-                    if (!Config.EnableAutomaticMapping) return;
-                    if (!Config.AllowPinningPortal) return;
-                    Map.RemovePin(__instance.transform.position);
-                };
+                    StaticObjectMapping.OnObjectDestroy(__instance, ___m_nview);
         }
 
         [HarmonyPostfix]
