@@ -120,6 +120,16 @@ if [[ "$file_version" != "$expected_assembly_version" ]]; then
     exit 1
 fi
 
+if [[ "$project_version" != "$changelog_version" ]]; then
+    echo "error: project version $project_version does not match latest changelog version $changelog_version" >&2
+    exit 1
+fi
+
+if [[ "$project_version" != "$latest_release_tag" ]]; then
+    echo "error: project version $project_version does not match latest release tag $latest_release_tag" >&2
+    exit 1
+fi
+
 if [[ "$changelog_version" != "$latest_release_tag" ]]; then
     echo "error: changelog version $changelog_version does not match latest release tag $latest_release_tag" >&2
     exit 1

@@ -75,7 +75,7 @@ namespace Automatics
 
                     var matcher = GetMatcher(key);
                     config.Key = matcher.IsRegex
-                        ? Regex.Replace(key, key, newKey)
+                        ? Regex.Replace(config.Key, matcher.Pattern, newKey, RegexOptions.IgnoreCase)
                         : newKey;
                     UpdateConfig(config, lines);
 
@@ -311,6 +311,10 @@ namespace Automatics
                     RenameConfig("automatic_feeding_enabled", "enable_automatic_feeding"),
                     RenameConfig("need_close_to_eat_the_feed", "need_get_close_to_eat_the_feed"),
                     RenameConfig("automatic_repair_enabled", "enable_automatic_repair"),
+                }},
+                { "[automatic_repair]", new List<Operation>
+                {
+                    RenameConfig("automatic_repair_enabled", "enable_automatic_repair"),
                 }}
             });
         }
@@ -411,7 +415,7 @@ namespace Automatics
                 {
                     AppendValues("allow_automatic_door", new[]
                     {
-                        "AshwoodDoor", "FlametalGate", "DvergrDoor"
+                        "PieceHexagonalDoor", "AshwoodDoor", "FlametalGate", "DvergrDoor"
                     }),
                 }},
                 { "[automatic_processing]", new List<Operation>

@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+#
+# Regression tests for scripts/check-version.sh.
+#
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+repo_root="$(cd -- "$script_dir/.." &>/dev/null && pwd)"
+tmp_dir="$(mktemp -d)"
+
+cleanup() {
+    rm -rf "$tmp_dir"
+}
+trap cleanup EXIT
+
+fixture="$tmp_dir/repo"
+mkdir -p "$fixture/scripts" "$fixture/Automatics/Properties" "$fixture/distributor/thunderstore" "$fixture/docs"
+cp "$repo_root/scripts/check-version.sh" "$fixture/scripts/check-version.sh"
+chmod +x "$fixture/scripts/check-version.sh"
+
+write_versions() {
+    local version="$1"
+    local assembly_version="$2"
+
+    cat >"$fixture/Automatics/Automatics.csproj" <<EOF
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Version>$version</Version>
+  </PropertyGroup>
+</Project>
+EOF
+
+    cat >"$fixture/Automatics/Automatics.cs" <<EOF
+public static class UnityPlugin
+{
+    private const string ModVersion = "$version";
+}
+EOF
+
+    cat >"$fixture/distributor/thunderstore/manifest.json" <<EOF
+{
+  "version_number": "$version"
+}
+EOF
+
+    cat >"$fixture/Automatics/Properties/AssemblyInfo.cs" <<EOF
+[assembly: AssemblyVersion("$assembly_version")]
+[assembly: AssemblyFileVersion("$assembly_version")]
+EOF
+}
+
+write_versions "1.6.0" "1.6.0.0"
+
+cat >"$fixture/CHANGELOG.md" <<'EOF'
+#### v1.6.0 [2026-05-17]
+- Release notes.
+EOF
+
+cat >"$fixture/distributor/thunderstore/README.md" <<'EOF'
+See [the user guide](https://github.com/eideehi/valheim-automatics/blob/1.6.0/docs/user-guide.md).
+EOF
+
+cat >"$fixture/docs/user-guide.md" <<'EOF'
+# User Guide
+EOF
+
+git -C "$fixture" init -q
+git -C "$fixture" config user.email "automatics-tests@example.invalid"
+git -C "$fixture" config user.name "Automatics Tests"
+git -C "$fixture" add .
+git -C "$fixture" commit -q -m "fixture release"
+git -C "$fixture" tag 1.6.0
+
+"$fixture/scripts/check-version.sh" >/dev/null
+
+write_versions "1.6.1" "1.6.1.0"
+if "$fixture/scripts/check-version.sh" >"$tmp_dir/stale-changelog.out" 2>"$tmp_dir/stale-changelog.err"; then
+    echo "error: check-version passed with package metadata ahead of changelog and latest tag" >&2
+    exit 1
+fi
+
+if ! grep -Fq 'project version 1.6.1 does not match latest changelog version 1.6.0' "$tmp_dir/stale-changelog.err"; then
+    echo "error: check-version failed for the wrong stale-changelog reason" >&2
+    cat "$tmp_dir/stale-changelog.err" >&2
+    exit 1
+fi
+
+cat >"$fixture/CHANGELOG.md" <<'EOF'
+#### v1.6.1 [2026-05-18]
+- Release notes.
+EOF
+
+if "$fixture/scripts/check-version.sh" >"$tmp_dir/ahead-tag.out" 2>"$tmp_dir/ahead-tag.err"; then
+    echo "error: check-version passed with package metadata and changelog ahead of latest tag" >&2
+    exit 1
+fi
+
+if ! grep -Fq 'project version 1.6.1 does not match latest release tag 1.6.0' "$tmp_dir/ahead-tag.err"; then
+    echo "error: check-version failed for the wrong latest-tag reason" >&2
+    cat "$tmp_dir/ahead-tag.err" >&2
+    exit 1
+fi
+
+echo "check-version regression tests passed."
