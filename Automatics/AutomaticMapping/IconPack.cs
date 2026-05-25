@@ -60,7 +60,7 @@ namespace Automatics.AutomaticMapping
         [UsedImplicitly]
         public static bool IsNameTagHidden(Minimap.PinData pinData)
         {
-            if (pinData.m_type <= _vanillaPinTypeLength) return false;
+            if (pinData.m_type < _vanillaPinTypeLength) return false;
             var icon = Icons.FirstOrDefault(x => x.PinType == pinData.m_type);
             return icon?.Options != null && icon.Options.hideNameTag;
         }
@@ -99,9 +99,19 @@ namespace Automatics.AutomaticMapping
 
         private static bool IsNameMatch(string name, string pattern, bool exactMatch)
         {
+            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(pattern))
+                return false;
+
             if (pattern.StartsWith("r/", StringComparison.OrdinalIgnoreCase))
             {
-                return Regex.IsMatch(name, pattern.Substring(2));
+                try
+                {
+                    return Regex.IsMatch(name, pattern.Substring(2));
+                }
+                catch (ArgumentException)
+                {
+                    return false;
+                }
             }
 
             return exactMatch
@@ -112,6 +122,33 @@ namespace Automatics.AutomaticMapping
         private static bool IsMetaDataEquals(MetaData a, MetaData b)
         {
             return a != null && a.CompareTo(b) == 0;
+        }
+
+        private static bool ValidateRegexTarget(Target target, out string message)
+        {
+            if (!ValidateRegexPattern(target.name, "target.name", out message))
+                return false;
+
+            return ValidateRegexPattern(target.prefabName, "target.prefabName", out message);
+        }
+
+        private static bool ValidateRegexPattern(string pattern, string fieldName, out string message)
+        {
+            message = "";
+            if (string.IsNullOrEmpty(pattern) ||
+                !pattern.StartsWith("r/", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            try
+            {
+                _ = new Regex(pattern.Substring(2));
+                return true;
+            }
+            catch (ArgumentException e)
+            {
+                message = $"Invalid custom icon regex in {fieldName} `{pattern}`: {e.Message}";
+                return false;
+            }
         }
 
         public static void Initialize()
@@ -156,6 +193,12 @@ namespace Automatics.AutomaticMapping
                     {
                         Automatics.Logger.Warning(
                             "Both target.name and target.prefabName cannot be omitted.");
+                        continue;
+                    }
+
+                    if (!ValidateRegexTarget(entry.target, out var message))
+                    {
+                        Automatics.Logger.Warning(message);
                         continue;
                     }
 

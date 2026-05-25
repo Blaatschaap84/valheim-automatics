@@ -24,6 +24,9 @@ namespace Automatics.Valheim
         [NonSerialized]
         private Regex _pattern;
 
+        [NonSerialized]
+        private bool _regexPatternValid = true;
+
         public bool regex
         {
             get => _regex;
@@ -46,17 +49,64 @@ namespace Automatics.Valheim
 
         public bool Matches(string name)
         {
-            if (!regex || _pattern is null)
+            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(_value))
+                return false;
+
+            if (!regex)
                 return string.Equals(name, _value, StringComparison.OrdinalIgnoreCase);
-            return _pattern.IsMatch(name);
+
+            return _regexPatternValid && _pattern != null && _pattern.IsMatch(name);
+        }
+
+        public bool TryValidate(string source, out string message)
+        {
+            if (string.IsNullOrEmpty(_value))
+            {
+                message = $"{source} has an empty matcher value.";
+                return false;
+            }
+
+            if (!regex)
+            {
+                message = "";
+                return true;
+            }
+
+            if (TryCompileRegex(_value, out _pattern, out var error))
+            {
+                _regexPatternValid = true;
+                message = "";
+                return true;
+            }
+
+            _regexPatternValid = false;
+            message = $"{source} has an invalid regex matcher `{_value}`: {error}";
+            return false;
         }
 
         private void OnUpdate()
         {
             _pattern = null;
+            _regexPatternValid = true;
 
             if (_regex && !string.IsNullOrEmpty(_value))
-                _pattern = new Regex(_value);
+                _regexPatternValid = TryCompileRegex(_value, out _pattern, out _);
+        }
+
+        private static bool TryCompileRegex(string pattern, out Regex regex, out string error)
+        {
+            regex = null;
+            error = "";
+            try
+            {
+                regex = new Regex(pattern);
+                return true;
+            }
+            catch (ArgumentException e)
+            {
+                error = e.Message;
+                return false;
+            }
         }
     }
 
@@ -70,9 +120,44 @@ namespace Automatics.Valheim
 
         public bool IsValid()
         {
-            return !string.IsNullOrEmpty(identifier) &&
-                   !string.IsNullOrEmpty(label) &&
-                   !(matches is null);
+            return TryValidate("", out _);
+        }
+
+        public bool TryValidate(string source, out string message)
+        {
+            if (string.IsNullOrEmpty(identifier))
+            {
+                message = $"{source} has an empty identifier.";
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(label))
+            {
+                message = $"{source} `{identifier}` has an empty label.";
+                return false;
+            }
+
+            if (matches is null || matches.Count == 0)
+            {
+                message = $"{source} `{identifier}` has no matchers.";
+                return false;
+            }
+
+            for (var i = 0; i < matches.Count; i++)
+            {
+                var matcher = matches[i];
+                if (matcher is null)
+                {
+                    message = $"{source} `{identifier}` has a null matcher at index {i}.";
+                    return false;
+                }
+
+                if (!matcher.TryValidate($"{source} `{identifier}` matcher {i}", out message))
+                    return false;
+            }
+
+            message = "";
+            return true;
         }
     }
 
@@ -86,7 +171,38 @@ namespace Automatics.Valheim
 
         public bool IsValid()
         {
-            return !string.IsNullOrEmpty(type) && !(values is null) && values.All(x => x.IsValid());
+            return TryValidate("", out _);
+        }
+
+        public bool TryValidate(string source, out string message)
+        {
+            if (string.IsNullOrEmpty(type))
+            {
+                message = $"{source} has an empty type.";
+                return false;
+            }
+
+            if (values is null)
+            {
+                message = $"{source} `{type}` has no values.";
+                return false;
+            }
+
+            for (var i = 0; i < values.Count; i++)
+            {
+                var element = values[i];
+                if (element is null)
+                {
+                    message = $"{source} `{type}` has a null value at index {i}.";
+                    return false;
+                }
+
+                if (!element.TryValidate($"{source} `{type}` value {i}", out message))
+                    return false;
+            }
+
+            message = "";
+            return true;
         }
     }
 
@@ -228,12 +344,12 @@ namespace Automatics.Valheim
 
                 GUILayout.BeginHorizontal();
                 var lineWidth = 0.0;
-                foreach (var element in elements.ToList())
+                foreach (var element in elements.Where(x => x != null).ToList())
                 {
                     var identifier = element.identifier;
                     var rawLabel = element.label;
                     var label = Automatics.L10N.TranslateInternalName(rawLabel);
-                    var pattern = element.matches[0].value;
+                    var pattern = element.matches?.FirstOrDefault()?.value ?? "";
 
                     var elementWidth =
                         Mathf.FloorToInt(GUI.skin.label.CalcSize(new GUIContent(label)).x) +
@@ -269,9 +385,22 @@ namespace Automatics.Valheim
 
             TomlTypeConverter.AddConverter(typeof(List<ObjectElement>), new TypeConverter
             {
-                ConvertToObject = (str, type) => string.IsNullOrEmpty(str)
-                    ? new List<ObjectElement>()
-                    : Json.Parse<List<ObjectElement>>(UnescapeToml(str.Trim('"'))),
+                ConvertToObject = (str, type) =>
+                {
+                    if (string.IsNullOrEmpty(str))
+                        return new List<ObjectElement>();
+
+                    try
+                    {
+                        return Json.Parse<List<ObjectElement>>(UnescapeToml(str.Trim('"'))) ??
+                               new List<ObjectElement>();
+                    }
+                    catch (Exception e)
+                    {
+                        Automatics.Logger?.Warning($"Failed to parse custom object config: {e.Message}");
+                        return new List<ObjectElement>();
+                    }
+                },
                 ConvertToString = (obj, type) =>
                 {
                     var elements = (List<ObjectElement>)obj;
@@ -345,20 +474,30 @@ namespace Automatics.Valheim
                 return;
             }
 
-            JsonCache.AddRange(Directory
-                .EnumerateFiles(directory, "*.json", SearchOption.AllDirectories)
-                .Select(x =>
+            foreach (var file in Directory.EnumerateFiles(directory, "*.json", SearchOption.AllDirectories))
+            {
+                try
                 {
-                    try
+                    var json = Json.Parse<ObjectDataJson>(File.ReadAllText(file));
+                    if (json is null)
                     {
-                        return Json.Parse<ObjectDataJson>(File.ReadAllText(x));
+                        Automatics.Logger.Warning($"Invalid object data skipped: {file} did not parse into an object.");
+                        continue;
                     }
-                    catch (Exception e)
+
+                    if (json.TryValidate(file, out var message))
                     {
-                        Automatics.Logger.Error($"Failed to read Json file\n{e}");
-                        return new ObjectDataJson();
+                        JsonCache.Add(json);
+                        continue;
                     }
-                }).Where(x => x.IsValid()));
+
+                    Automatics.Logger.Warning($"Invalid object data skipped: {message}");
+                }
+                catch (Exception e)
+                {
+                    Automatics.Logger.Error($"Failed to read Json file: {file}\n{e}");
+                }
+            }
         }
 
         public static void Initialize(IEnumerable<string> directories)
@@ -387,29 +526,68 @@ namespace Automatics.Valheim
             _allElements.AddRange(_customElements.Values);
         }
 
+        private static ObjectElement CloneElement(ObjectElement element)
+        {
+            return new ObjectElement
+            {
+                identifier = element.identifier,
+                label = element.label,
+                matches = new List<ObjectMatcher>(element.matches)
+            };
+        }
+
+        private static void LogWarning(string message)
+        {
+            Automatics.Logger?.Warning(message);
+        }
+
+        private void ReportDuplicateExactMatchers()
+        {
+            var seen = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var element in _elements.Values)
+            foreach (var matcher in element.matches.Where(x => x != null && !x.regex &&
+                                                               !string.IsNullOrEmpty(x.value)))
+            {
+                if (seen.TryGetValue(matcher.value, out var identifier))
+                {
+                    LogWarning(
+                        $"Duplicate exact matcher `{matcher.value}` in `{_type}` objects: `{identifier}` and `{element.identifier}`.");
+                    continue;
+                }
+
+                seen[matcher.value] = element.identifier;
+            }
+        }
+
         private void Register(IEnumerable<ObjectDataJson> jsons)
         {
             foreach (var element in jsons.Where(x => x.type.ToLower() == _type)
                          .OrderBy(x => x.order).SelectMany(x => x.values))
-                _elements[element.identifier.ToLower()] = new ObjectElement
-                {
-                    identifier = element.identifier,
-                    label = element.label,
-                    matches = new List<ObjectMatcher>(element.matches)
-                };
+                _elements[element.identifier.ToLower()] = CloneElement(element);
+            ReportDuplicateExactMatchers();
             UpdateElements();
         }
 
         public void RegisterCustom(IEnumerable<ObjectElement> elements)
         {
             _customElements.Clear();
-            foreach (var element in elements)
-                _customElements[element.identifier.ToLower()] = new ObjectElement
+            foreach (var element in elements ?? Enumerable.Empty<ObjectElement>())
+            {
+                if (element is null)
                 {
-                    identifier = element.identifier,
-                    label = element.label,
-                    matches = new List<ObjectMatcher>(element.matches)
-                };
+                    LogWarning($"Invalid custom `{_type}` object skipped: null element.");
+                    continue;
+                }
+
+                if (!element.TryValidate($"custom `{_type}` object", out var message))
+                {
+                    LogWarning($"Invalid custom `{_type}` object skipped: {message}");
+                    continue;
+                }
+
+                _customElements[element.identifier.ToLower()] = CloneElement(element);
+            }
+
             UpdateElements();
             RegistryChanged?.Invoke(this);
         }
@@ -431,7 +609,8 @@ namespace Automatics.Valheim
 
         public bool GetIdentify(string name, out string identifier)
         {
-            var element = _allElements.FirstOrDefault(x => x.matches.Any(y => y.Matches(name)));
+            var element = _allElements.FirstOrDefault(x =>
+                x != null && x.matches != null && x.matches.Any(y => y != null && y.Matches(name)));
             if (element is null || !element.IsValid())
             {
                 identifier = "";
