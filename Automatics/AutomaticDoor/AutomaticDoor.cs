@@ -13,6 +13,9 @@ namespace Automatics.AutomaticDoor
         private const float MinPredictionSpeed = 1f;
         private const float MinApproachDot = 0.35f;
         private const float CloseGracePeriod = 0.35f;
+        private const string PrivateAreaAllAreasField = "m_allAreas";
+        private const string PrivateAreaPieceField = "m_piece";
+        private const string PrivateAreaZNetViewField = "m_nview";
 
         private static readonly Lazy<int> LazyPieceMask;
         private static readonly IList<AutomaticDoor> AllInstance;
@@ -90,6 +93,9 @@ namespace Automatics.AutomaticDoor
             var closeRange = Config.DistanceForAutomaticClosing;
             if (closeRange <= 0f) return;
 
+            var holdOpenRange = Config.IntervalToOpen >= 0.1f
+                ? Mathf.Max(closeRange, Config.DistanceForAutomaticOpening)
+                : closeRange;
             var players = Player.GetAllPlayers();
             for (var index = AllInstance.Count - 1; index >= 0; index--)
             {
@@ -100,7 +106,7 @@ namespace Automatics.AutomaticDoor
                     continue;
                 }
 
-                automaticDoor.TryClose(players, closeRange);
+                automaticDoor.TryClose(players, closeRange, holdOpenRange);
             }
         }
 
@@ -123,7 +129,7 @@ namespace Automatics.AutomaticDoor
         {
             if (!IsValid()) return;
             if (!IsAllowAutomaticDoor()) return;
-            if (IsDoorOpen() || !CanInteract()) return;
+            if (IsDoorOpen() || !CanInteract(player)) return;
             if (!CanOpen(player)) return;
 
             var playerPosition = player.transform.position;
@@ -141,16 +147,17 @@ namespace Automatics.AutomaticDoor
             _lastAutomaticOpenTime = Time.time;
         }
 
-        private void TryClose(IEnumerable<Player> players, float closeRange)
+        private void TryClose(IEnumerable<Player> players, float closeRange, float holdOpenRange)
         {
             if (!IsValid()) return;
             if (!IsAllowAutomaticDoor()) return;
-            if (!IsDoorOpen() || !CanInteract()) return;
+            if (!IsDoorOpen()) return;
             if (Time.time - _lastAutomaticOpenTime < CloseGracePeriod) return;
 
-            var closestPlayer = default(Player);
+            var closestInteractablePlayer = default(Player);
             var closestDistanceSquared = float.MaxValue;
             var closeRangeSquared = closeRange * closeRange;
+            var holdOpenRangeSquared = holdOpenRange * holdOpenRange;
             var doorPosition = _transform.position;
 
             foreach (var player in players)
@@ -161,16 +168,24 @@ namespace Automatics.AutomaticDoor
                 if (distanceSquared <= closeRangeSquared)
                     return;
 
+                var canInteract = CanInteract(player);
+                if (distanceSquared <= holdOpenRangeSquared &&
+                    canInteract &&
+                    CanOpen(player) &&
+                    !IsExistsObstaclesBetweenTo(player))
+                    return;
+
+                if (!canInteract) continue;
                 if (distanceSquared >= closestDistanceSquared) continue;
 
                 closestDistanceSquared = distanceSquared;
-                closestPlayer = player;
+                closestInteractablePlayer = player;
             }
 
-            if (!closestPlayer) return;
+            if (!closestInteractablePlayer) return;
 
             Reflections.InvokeMethod(_door, "Open",
-                (closestPlayer.transform.position - doorPosition).normalized);
+                (closestInteractablePlayer.transform.position - doorPosition).normalized);
         }
 
         private bool IsAllowAutomaticDoor()
@@ -192,11 +207,69 @@ namespace Automatics.AutomaticDoor
             return _zNetView.GetZDO().GetInt("state") != 0;
         }
 
-        private bool CanInteract()
+        private bool CanInteract(Player player)
         {
-            if (_door.m_checkGuardStone && !PrivateArea.CheckAccess(_transform.position))
+            if (_door.m_checkGuardStone && !CheckWardAccess(player, _transform.position))
                 return false;
             return Reflections.InvokeMethod<bool>(_door, "CanInteract");
+        }
+
+        private static bool CheckWardAccess(Player player, Vector3 point)
+        {
+            if (!player) return false;
+
+            var areas = Reflections.GetStaticField<PrivateArea, List<PrivateArea>>(PrivateAreaAllAreasField);
+            if (areas == null) return false;
+
+            var allowed = false;
+            var foundBlockedArea = false;
+            foreach (var area in areas)
+            {
+                if (!IsEnabled(area) || !IsInside(area, point, 0f)) continue;
+
+                if (HasPlayerAccess(area, player))
+                    allowed = true;
+                else
+                    foundBlockedArea = true;
+            }
+
+            return allowed || !foundBlockedArea;
+        }
+
+        private static bool IsEnabled(PrivateArea area)
+        {
+            if (!area) return false;
+
+            var zNetView = Reflections.GetField<ZNetView>(area, PrivateAreaZNetViewField);
+            return zNetView != null &&
+                   zNetView.IsValid() &&
+                   zNetView.GetZDO().GetBool(ZDOVars.s_enabled);
+        }
+
+        private static bool IsInside(PrivateArea area, Vector3 point, float radius)
+        {
+            return Utils.DistanceXZ(area.transform.position, point) < area.m_radius + radius;
+        }
+
+        private static bool HasPlayerAccess(PrivateArea area, Player player)
+        {
+            var playerId = player.GetPlayerID();
+            if (playerId == 0L) return false;
+
+            var piece = Reflections.GetField<Piece>(area, PrivateAreaPieceField);
+            if (piece && piece.GetCreator() == playerId)
+                return true;
+
+            var zNetView = Reflections.GetField<ZNetView>(area, PrivateAreaZNetViewField);
+            if (zNetView == null || !zNetView.IsValid()) return false;
+
+            var zdo = zNetView.GetZDO();
+            var permittedCount = zdo.GetInt(ZDOVars.s_permitted);
+            for (var index = 0; index < permittedCount; index++)
+                if (zdo.GetLong("pu_id" + index, 0L) == playerId)
+                    return true;
+
+            return false;
         }
 
         private bool CanOpen(Player player)
