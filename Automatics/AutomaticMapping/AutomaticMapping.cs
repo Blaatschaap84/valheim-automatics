@@ -6,6 +6,7 @@ using System.Text;
 using Automatics.Valheim;
 using JetBrains.Annotations;
 using ModUtils;
+using Splatform;
 using UnityEngine;
 
 namespace Automatics.AutomaticMapping
@@ -181,6 +182,7 @@ namespace Automatics.AutomaticMapping
         private static readonly Dictionary<ZDOID, Vector3> PinTargetCache;
         private static readonly Dictionary<ZDOID, Vector3> PinVelocityCache;
         private static readonly IDictionary<ZDOID, Minimap.PinData> VehiclePinCache;
+        private static readonly Dictionary<Minimap.PinData, ZDOID> VehiclePinKeyCache;
         private static readonly Dictionary<ZDOID, Vector3> VehiclePinTargetCache;
         private static readonly Dictionary<ZDOID, Vector3> VehiclePinVelocityCache;
         private static readonly HashSet<ZDOID> KnownObjects;
@@ -203,6 +205,10 @@ namespace Automatics.AutomaticMapping
         // without allocating or mutating the live set during enumeration.
         private static readonly List<ZDOID> DirtyDrainBuffer;
 
+        private const float VehiclePinAdoptionRadius = 8f;
+        private const float VehiclePinAdoptionRadiusSq =
+            VehiclePinAdoptionRadius * VehiclePinAdoptionRadius;
+
         // Weak keys so destroyed Character instances fall out without manual
         // bookkeeping; nothing else scans these tables.
         private static readonly ConditionalWeakTable<Character, CachedIdentifier>
@@ -223,6 +229,7 @@ namespace Automatics.AutomaticMapping
             PinTargetCache = new Dictionary<ZDOID, Vector3>();
             PinVelocityCache = new Dictionary<ZDOID, Vector3>();
             VehiclePinCache = new Dictionary<ZDOID, Minimap.PinData>();
+            VehiclePinKeyCache = new Dictionary<Minimap.PinData, ZDOID>();
             VehiclePinTargetCache = new Dictionary<ZDOID, Vector3>();
             VehiclePinVelocityCache = new Dictionary<ZDOID, Vector3>();
             KnownObjects = new HashSet<ZDOID>();
@@ -340,6 +347,7 @@ namespace Automatics.AutomaticMapping
             PinTargetCache.Clear();
             PinVelocityCache.Clear();
             VehiclePinCache.Clear();
+            VehiclePinKeyCache.Clear();
             VehiclePinTargetCache.Clear();
             VehiclePinVelocityCache.Clear();
             KnownObjects.Clear();
@@ -349,14 +357,12 @@ namespace Automatics.AutomaticMapping
 
         public static void OnObjectDestroy(Component component)
         {
-            if (!Config.EnableAutomaticMapping) return;
             if (component.GetComponent<Ship>() || component.GetComponent<Vagon>())
             {
                 if (!Objects.GetZdoid(component, out var uniqueId)) return;
                 if (!VehiclePinCache.TryGetValue(uniqueId, out var pin)) return;
-                VehiclePinTargetCache.Remove(uniqueId);
-                VehiclePinVelocityCache.Remove(uniqueId);
-                VehicleDirtyPins.Remove(uniqueId);
+                RemoveVehiclePinFromCache(uniqueId);
+                if (!Config.EnableAutomaticMapping) return;
                 Map.RemovePin(pin);
             }
         }
@@ -394,6 +400,35 @@ namespace Automatics.AutomaticMapping
         public static void OnRemovePin(Minimap.PinData pinData)
         {
             RemovePinFromCache(pinData);
+            RemoveVehiclePinFromCache(pinData);
+        }
+
+        public static void FlushVehiclePins()
+        {
+            if (VehiclePinCache.Count == 0) return;
+
+            RemoveKeyBuffer.Clear();
+            foreach (var pair in VehiclePinCache)
+            {
+                var uniqueId = pair.Key;
+                var pinData = pair.Value;
+                if (pinData == null ||
+                    !Map.ContainsPin(pinData) ||
+                    !VehiclePinTargetCache.TryGetValue(uniqueId, out var target))
+                {
+                    RemoveKeyBuffer.Add(uniqueId);
+                    continue;
+                }
+
+                Map.MovePin(pinData, target);
+                VehiclePinVelocityCache[uniqueId] = Vector3.zero;
+                VehicleDirtyPins.Remove(uniqueId);
+            }
+
+            for (var i = 0; i < RemoveKeyBuffer.Count; i++)
+                RemoveVehiclePinFromCache(RemoveKeyBuffer[i]);
+
+            RemoveKeyBuffer.Clear();
         }
 
         public static bool SetSaveFlag(Minimap.PinData pinData)
@@ -592,18 +627,164 @@ namespace Automatics.AutomaticMapping
                 var name = Objects.GetName(vehicle);
                 if (!GetVehicle(name, out var vehicleData) || !vehicleData.IsAllowed) continue;
 
-                if (VehiclePinCache.TryGetValue(uniqueId, out _))
+                if (TryGetCachedVehiclePin(uniqueId, out _))
                 {
                     TryMarkTargetDirty(VehiclePinTargetCache, VehicleDirtyPins, uniqueId, pos);
                 }
                 else
                 {
-                    var pin = Map.AddPin(pos, name, true, CreateTarget(vehicle.gameObject, name));
-                    VehiclePinCache.Add(uniqueId, pin);
-                    VehiclePinTargetCache[uniqueId] = pos;
-                    VehiclePinVelocityCache[uniqueId] = Vector3.zero;
+                    var target = CreateTarget(vehicle.gameObject, name);
+                    if (TryFindExistingVehiclePin(pos, name, target, out var pin))
+                    {
+                        CacheVehiclePin(uniqueId, pin);
+                        MarkVehiclePin(pin);
+                        VehiclePinTargetCache[uniqueId] = pin.m_pos;
+                        VehiclePinVelocityCache[uniqueId] = Vector3.zero;
+                        TryMarkTargetDirty(VehiclePinTargetCache, VehicleDirtyPins, uniqueId, pos);
+                    }
+                    else
+                    {
+                        pin = Map.AddPin(pos, name, true, target);
+                        MarkVehiclePin(pin);
+                        CacheVehiclePin(uniqueId, pin);
+                        VehiclePinTargetCache[uniqueId] = pos;
+                        VehiclePinVelocityCache[uniqueId] = Vector3.zero;
+                    }
                 }
             }
+        }
+
+        private static bool TryGetCachedVehiclePin(ZDOID uniqueId, out Minimap.PinData pinData)
+        {
+            if (VehiclePinCache.TryGetValue(uniqueId, out pinData) &&
+                pinData != null &&
+                Map.ContainsPin(pinData))
+                return true;
+
+            RemoveVehiclePinFromCache(uniqueId);
+            pinData = null;
+            return false;
+        }
+
+        private static bool TryFindExistingVehiclePin(Vector3 pos, string pinName, Target target,
+            out Minimap.PinData pinData)
+        {
+            var pinType = IconPack.GetPinType(target);
+            var pins = Map.GetAllPins();
+            var bestDistanceSq = float.MaxValue;
+            pinData = null;
+
+            for (var i = 0; i < pins.Count; i++)
+            {
+                var candidate = pins[i];
+                var markedVehiclePin = IsMarkedVehiclePin(candidate);
+                if (candidate == null ||
+                    !candidate.m_save ||
+                    candidate.m_ownerID != 0L ||
+                    candidate.m_name != pinName ||
+                    VehiclePinKeyCache.ContainsKey(candidate) ||
+                    (!markedVehiclePin &&
+                     !IsLikelyLegacyVehiclePin(candidate, pinName, pinType)))
+                    continue;
+
+                var distanceSq = HorizontalDistanceSq(pos, candidate.m_pos);
+                if (distanceSq > VehiclePinAdoptionRadiusSq ||
+                    distanceSq >= bestDistanceSq)
+                    continue;
+
+                pinData = candidate;
+                bestDistanceSq = distanceSq;
+            }
+
+            return pinData != null;
+        }
+
+        private static bool IsLikelyLegacyVehiclePin(Minimap.PinData pinData, string pinName,
+            Minimap.PinType currentPinType)
+        {
+            return pinData != null &&
+                   !pinData.m_author.IsValid &&
+                   !pinData.m_checked &&
+                   IsInternalPinName(pinName) &&
+                   IsVehiclePinTypeCompatible(pinData.m_type, currentPinType);
+        }
+
+        private static bool IsInternalPinName(string pinName)
+        {
+            return !string.IsNullOrEmpty(pinName) && pinName[0] == '$';
+        }
+
+        private static bool IsVehiclePinTypeCompatible(Minimap.PinType pinType,
+            Minimap.PinType currentPinType)
+        {
+            return pinType == currentPinType || pinType == Minimap.PinType.Icon3;
+        }
+
+        private static float HorizontalDistanceSq(Vector3 a, Vector3 b)
+        {
+            var dx = a.x - b.x;
+            var dz = a.z - b.z;
+            return dx * dx + dz * dz;
+        }
+
+        private static void CacheVehiclePin(ZDOID uniqueId, Minimap.PinData pinData)
+        {
+            if (VehiclePinCache.TryGetValue(uniqueId, out var existing) &&
+                !ReferenceEquals(existing, pinData))
+                VehiclePinKeyCache.Remove(existing);
+
+            VehiclePinCache[uniqueId] = pinData;
+            VehiclePinKeyCache[pinData] = uniqueId;
+        }
+
+        private static void MarkVehiclePin(Minimap.PinData pinData)
+        {
+            if (pinData == null || !TryGetLocalPlatformUserId(out var userId)) return;
+            pinData.m_author = userId;
+        }
+
+        private static bool IsMarkedVehiclePin(Minimap.PinData pinData)
+        {
+            return pinData != null &&
+                   pinData.m_author.IsValid &&
+                   TryGetLocalPlatformUserId(out var userId) &&
+                   pinData.m_author == userId;
+        }
+
+        private static bool TryGetLocalPlatformUserId(out PlatformUserID userId)
+        {
+            userId = PlatformUserID.None;
+            var platform = PlatformManager.DistributionPlatform;
+            var localUser = platform?.LocalUser;
+            if (localUser == null) return false;
+
+            userId = localUser.PlatformUserID;
+            return userId.IsValid;
+        }
+
+        private static bool RemoveVehiclePinFromCache(Minimap.PinData pinData)
+        {
+            if (pinData == null || !VehiclePinKeyCache.TryGetValue(pinData, out var uniqueId))
+                return false;
+
+            RemoveVehiclePinFromCache(uniqueId);
+            return true;
+        }
+
+        private static bool RemoveVehiclePinFromCache(ZDOID uniqueId)
+        {
+            var found = VehiclePinCache.TryGetValue(uniqueId, out var pinData);
+            if (found)
+            {
+                VehiclePinCache.Remove(uniqueId);
+                if (pinData != null)
+                    VehiclePinKeyCache.Remove(pinData);
+            }
+
+            VehiclePinTargetCache.Remove(uniqueId);
+            VehiclePinVelocityCache.Remove(uniqueId);
+            VehicleDirtyPins.Remove(uniqueId);
+            return found;
         }
 
         private static void AddOrUpdatePin(Character character, float delta)

@@ -206,6 +206,13 @@ namespace Automatics.AutomaticMapping
             AutomaticMapping.AnimatePins();
         }
 
+        [HarmonyPrefix]
+        [HarmonyPatch(typeof(Minimap), nameof(Minimap.SaveMapData))]
+        private static void Minimap_SaveMapData_Prefix()
+        {
+            DynamicObjectMapping.FlushVehiclePins();
+        }
+
         [HarmonyTranspiler]
         [HarmonyPatch(typeof(Minimap), nameof(Minimap.AddPin))]
         private static IEnumerable<CodeInstruction> Minimap_AddPin_Transpiler(
