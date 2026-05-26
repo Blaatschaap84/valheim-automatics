@@ -51,16 +51,17 @@ namespace Automatics.AutomaticMining
         {
             //TODO: Improve position taking method. Petrified bone and soft tissue position is not being obtained correctly.
             var origin = player.transform.position;
-            var automaticMining = (from x in AllInstance
+            var automaticMinings = (from x in AllInstance
                     let distance = Vector3.Distance(origin, x.transform.position)
-                    where x._zNetView.IsValid() && x._zNetView.IsOwner() &&
+                    where x._zNetView.IsValid() &&
+                          x._zNetView.HasOwner() &&
                           IsAllowMiningMinerals(x._component)
                     orderby distance
-                    select x)
-                .FirstOrDefault();
+                    select x).ToList();
 
-            if (automaticMining)
-                automaticMining.Mining(player);
+            foreach (var automaticMining in automaticMinings)
+                if (automaticMining.Mining(player))
+                    return;
 
             bool IsAllowMiningMinerals(Component component)
             {
@@ -82,54 +83,80 @@ namespace Automatics.AutomaticMining
             }
         }
 
-        private void Mining(Player player)
+        private bool Mining(Player player)
         {
-            var pickaxe = GetPickaxe(player);
-            if (pickaxe == null) return;
+            if (!GetMiningTarget(out var parent, out var minToolTier))
+                return false;
 
-            var attack = pickaxe.m_shared.m_attack;
-            var range = Config.MiningRange > 0 ? Config.MiningRange : attack.m_attackRange;
+            var pickaxe = GetPickaxe(player, minToolTier);
+            if (pickaxe == null) return false;
 
+            var colliders = GetColliders(parent);
+            var range = GetMiningRange(pickaxe);
+            return Mining(player, pickaxe, range, parent, colliders);
+        }
+
+        private bool GetMiningTarget(out IDestructible parent, out int minToolTier)
+        {
             switch (_component)
             {
                 case MineRock rock:
-                    if (rock.m_minToolTier <= pickaxe.m_shared.m_toolTier)
-                        Mining(player, pickaxe, range, rock,
-                            Reflections.GetField<Collider[]>(rock, "m_hitAreas"));
-                    break;
+                    parent = rock;
+                    minToolTier = rock.m_minToolTier;
+                    return true;
                 case MineRock5 rock5:
-                    if (rock5.m_minToolTier <= pickaxe.m_shared.m_toolTier)
-                        Mining(player, pickaxe, range, rock5,
-                            rock5.gameObject.GetComponentsInChildren<Collider>());
-                    break;
+                    parent = rock5;
+                    minToolTier = rock5.m_minToolTier;
+                    return true;
                 case Destructible destructible:
-                    if (destructible.m_minToolTier <= pickaxe.m_shared.m_toolTier)
-                        Mining(player, pickaxe, range, destructible,
-                            destructible.GetComponentInChildren<Collider>());
-                    break;
+                    parent = destructible;
+                    minToolTier = destructible.m_minToolTier;
+                    return true;
+                default:
+                    parent = null;
+                    minToolTier = 0;
+                    return false;
             }
         }
 
-        private static void Mining(Player player, ItemDrop.ItemData pickaxe, float range,
+        private static Collider[] GetColliders(IDestructible parent)
+        {
+            switch (parent)
+            {
+                case MineRock rock:
+                    return Reflections.GetField<Collider[]>(rock, "m_hitAreas");
+                case MineRock5 rock5:
+                    return rock5.gameObject.GetComponentsInChildren<Collider>();
+                case Destructible destructible:
+                    return new[] { destructible.GetComponentInChildren<Collider>() };
+                default:
+                    return null;
+            }
+        }
+
+        private static bool Mining(Player player, ItemDrop.ItemData pickaxe, float range,
             IDestructible parent, params Collider[] colliders)
         {
-            if (colliders == null || colliders.Length == 0) return;
+            if (colliders == null || colliders.Length == 0) return false;
 
             var equipments = player.GetInventory().GetEquippedItems();
             var parts = (from collider in colliders
+                where collider != null
                 let result = GetHitPosition(player.m_eye.position, collider, range)
                 where result.Position != Vector3.zero &&
                       IsMineableMineral(collider, equipments)
                 orderby result.Distance
                 select (collider, result.Position)).Take(3).ToList();
+            var mined = false;
             foreach (var (collider, hit) in parts)
             {
                 if (!IsValidPickaxe(player, pickaxe)) continue;
-                if (Vector3.Distance(player.m_eye.position, hit) > Config.MiningRange) continue;
+                if (Vector3.Distance(player.m_eye.position, hit) > range) continue;
 
                 CreateHitEffect(pickaxe, hit);
                 parent.Damage(CreateHitData(player, pickaxe, hit, collider, parts.Count));
                 UsePickaxe(player, pickaxe);
+                mined = true;
 
                 Automatics.Logger.Debug(() =>
                 {
@@ -139,6 +166,8 @@ namespace Automatics.AutomaticMining
                     return $"Mining: [name: {name}, pos: {collider.bounds.center}]";
                 });
             }
+
+            return mined;
         }
 
         private static bool IsValidPickaxe(Player player, ItemDrop.ItemData pickaxe)
@@ -148,31 +177,44 @@ namespace Automatics.AutomaticMining
             return pickaxe.m_durability > 0f;
         }
 
-        private static ItemDrop.ItemData GetPickaxe(Player player)
+        private static ItemDrop.ItemData GetPickaxe(Player player, int minToolTier)
         {
             var weapon = player.GetCurrentWeapon();
             if (weapon != null)
                 if (weapon.m_durability > 0f &&
-                    weapon.m_shared.m_skillType == Skills.SkillType.Pickaxes)
+                    weapon.m_shared.m_skillType == Skills.SkillType.Pickaxes &&
+                    weapon.m_shared.m_toolTier >= minToolTier)
                     return weapon;
 
             if (Config.NeedToEquipPickaxe) return null;
 
             return (from x in player.GetInventory().GetAllItems()
                 where x.m_durability > 0f &&
-                      x.m_shared.m_skillType == Skills.SkillType.Pickaxes
+                      x.m_shared.m_skillType == Skills.SkillType.Pickaxes &&
+                      x.m_shared.m_toolTier >= minToolTier
                 orderby x.m_shared.m_toolTier
                 select x).FirstOrDefault();
+        }
+
+        private static float GetMiningRange(ItemDrop.ItemData pickaxe)
+        {
+            var attack = pickaxe.m_shared.m_attack;
+            return Config.MiningRange > 0 ? Config.MiningRange : attack.m_attackRange;
         }
 
         private static (Vector3 Position, float Distance) GetHitPosition(Vector3 origin,
             Collider target, float range)
         {
             var direction = target.bounds.center - origin;
-            Physics.RaycastNonAlloc(origin, direction, RaycastHitBuffer, range, MineralMask);
-            foreach (var hit in RaycastHitBuffer.Where(hit =>
-                         hit.collider == target && hit.distance <= range))
-                return (hit.point, hit.distance);
+            var hitCount = Physics.RaycastNonAlloc(origin, direction, RaycastHitBuffer, range,
+                MineralMask);
+            for (var i = 0; i < hitCount; i++)
+            {
+                var hit = RaycastHitBuffer[i];
+                if (hit.collider == target && hit.distance <= range)
+                    return (hit.point, hit.distance);
+            }
+
             return (Vector3.zero, -1f);
         }
 
