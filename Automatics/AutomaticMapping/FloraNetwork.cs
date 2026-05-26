@@ -34,7 +34,8 @@ namespace Automatics.AutomaticMapping
 
             if (_uniqueId != ZDOID.None)
                 NodeIndex[_uniqueId] = this;
-            base.Awake();
+            ObjectNodes.Add(this);
+            Invoke(nameof(NetworkConstruction), UnityEngine.Random.Range(1f, 2f));
         }
 
         protected override void OnDestroy()
@@ -44,7 +45,9 @@ namespace Automatics.AutomaticMapping
                 ReferenceEquals(node, this))
                 NodeIndex.Remove(_uniqueId);
 
-            base.OnDestroy();
+            ObjectNodes.Remove(this);
+            Network?.RemoveNode(this);
+            Network = null;
 
             _pickable = null;
             _zNetView = null;
@@ -68,6 +71,53 @@ namespace Automatics.AutomaticMapping
         protected override FloraNetwork CreateNetwork()
         {
             return new FloraNetwork();
+        }
+
+        private void NetworkConstruction()
+        {
+            if (!IsValid()) return;
+
+            foreach (var node in ObjectNodes
+                         .Where(node => node != null && node.IsValid() && IsConnectable(node))
+                         .ToList())
+            {
+                if (ReferenceEquals(node, this)) continue;
+                if (Network != null && ReferenceEquals(Network, node.Network)) continue;
+
+                if (Network == null && node.Network == null)
+                {
+                    Network = CreateNetwork();
+                    Network.AddNode(this);
+                    node.Network = Network;
+                    Network.AddNode(node);
+                }
+                else if (Network == null)
+                {
+                    Network = node.Network;
+                    Network.AddNode(this);
+                }
+                else if (node.Network == null)
+                {
+                    node.Network = Network;
+                    Network.AddNode(node);
+                }
+                else
+                {
+                    var src = Network.NodeCount >= node.Network.NodeCount ? node.Network : Network;
+                    var dest = Network.NodeCount >= node.Network.NodeCount ? Network : node.Network;
+                    foreach (var member in src.GetAllNodes())
+                    {
+                        member.Network.RemoveNode(member);
+                        member.Network = dest;
+                        member.Network.AddNode(member);
+                    }
+                }
+            }
+
+            if (Network != null) return;
+
+            Network = CreateNetwork();
+            Network.AddNode(this);
         }
 
         protected override bool IsConnectable(FloraNode other)

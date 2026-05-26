@@ -2258,11 +2258,6 @@ namespace Automatics.AutomaticMapping
             if (!data.IsAllowed) return true;
             if (!Objects.GetZdoid(component, out var uniqueId)) return true;
             var identify = new MapPinIdentify(uniqueId);
-            if (TryGetCachedPin(identify, out _))
-            {
-                MarkSeen(identify);
-                return true;
-            }
 
             if (ValheimObject.Mineral.GetName(data.Identifier, out var label))
                 name = label;
@@ -2270,6 +2265,12 @@ namespace Automatics.AutomaticMapping
             Vector3 pos;
             float maxHeight;
             if (!TryGetMineralPosition(component, out pos, out maxHeight)) return true;
+
+            if (TryGetCachedPin(identify, out _))
+            {
+                MarkSeen(identify);
+                return true;
+            }
 
             if (Map.GetClosestPin(pos) != null) return true;
 
@@ -2286,12 +2287,10 @@ namespace Automatics.AutomaticMapping
             return true;
         }
 
-        // MineRock5 returns the Awake-time snapshot so scan-time bounds
-        // reads do not fall on child colliders that DamageArea has
-        // deactivated (inactive colliders report empty bounds centered
-        // at the origin, which would skew the average). Other mineral
-        // shapes keep live-bounds aggregation since their colliders
-        // stay active for the object's lifetime.
+        // MineRock5 reads Awake-time bounds plus current per-area health so
+        // partially mined rocks stay pinned while dead child colliders are
+        // ignored. Other mineral shapes keep live-bounds aggregation since
+        // their colliders stay active for the object's lifetime.
         private static bool TryGetMineralPosition(Component component, out Vector3 position,
             out float maxHeight)
         {
@@ -2299,25 +2298,43 @@ namespace Automatics.AutomaticMapping
             maxHeight = float.MinValue;
 
             if (component is MineRock5 rock5)
-            {
-                if (!MineRock5Cache.TryGetOrBuildSnapshotAlive(rock5, out var snapshot)) return false;
-                if (snapshot.ColliderCount == 0) return false;
-                if (snapshot.Center == Vector3.zero) return false;
+                return MineRock5Cache.TryGetLivePosition(rock5, out position, out maxHeight);
 
-                position = snapshot.Center;
-                maxHeight = snapshot.MaxHeight;
-                return true;
-            }
+            if (component is MineRock rock)
+                return TryGetMineRockPosition(rock, out position, out maxHeight);
 
             var colliders = GetMineralColliders(component);
             var count = 0;
             var sum = Vector3.zero;
             for (var i = 0; i < colliders.Length; i++)
+                AddColliderBounds(colliders[i], ref sum, ref maxHeight, ref count);
+
+            if (count == 0 || sum == Vector3.zero) return false;
+
+            position = sum / count;
+            return true;
+        }
+
+        private static bool TryGetMineRockPosition(MineRock rock, out Vector3 position,
+            out float maxHeight)
+        {
+            position = Vector3.zero;
+            maxHeight = float.MinValue;
+
+            var colliders = Reflections.GetField<Collider[]>(rock, "m_hitAreas");
+            if (colliders == null) return false;
+            if (!Objects.GetZNetView(rock, out var zNetView)) return false;
+            var zdo = zNetView.GetZDO();
+            if (zdo == null) return false;
+
+            var count = 0;
+            var sum = Vector3.zero;
+            for (var i = 0; i < colliders.Length; i++)
             {
-                var bounds = colliders[i].bounds;
-                sum += bounds.center;
-                if (bounds.max.y > maxHeight) maxHeight = bounds.max.y;
-                ++count;
+                var collider = colliders[i];
+                if (!collider) continue;
+                if (zdo.GetFloat("Health" + i, rock.m_health) <= 0f) continue;
+                AddColliderBounds(collider, ref sum, ref maxHeight, ref count);
             }
 
             if (count == 0 || sum == Vector3.zero) return false;
@@ -2331,19 +2348,6 @@ namespace Automatics.AutomaticMapping
             var empty = Array.Empty<Collider>();
             switch (component)
             {
-                case MineRock rock:
-                {
-                    var array = Reflections.GetField<Collider[]>(rock, "m_hitAreas");
-                    if (array == null) return empty;
-
-                    if (!Objects.GetZNetView(rock, out var zNetView)) return empty;
-
-                    for (var i = 0; i < array.Length; i++)
-                        if (zNetView.GetZDO().GetFloat("Health" + i, rock.m_health) <= 0f)
-                            return empty;
-
-                    return array;
-                }
                 case Destructible destructible:
                 {
                     var collider = destructible.GetComponentInChildren<Collider>();
@@ -2352,6 +2356,17 @@ namespace Automatics.AutomaticMapping
                 default:
                     return empty;
             }
+        }
+
+        private static void AddColliderBounds(Collider collider, ref Vector3 sum,
+            ref float maxHeight, ref int count)
+        {
+            if (!collider) return;
+
+            var bounds = collider.bounds;
+            sum += bounds.center;
+            if (bounds.max.y > maxHeight) maxHeight = bounds.max.y;
+            count++;
         }
 
         private static bool SpawnerMapping(Component component, string name)

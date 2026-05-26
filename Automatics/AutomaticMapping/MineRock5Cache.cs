@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using HarmonyLib;
 using ModUtils;
@@ -6,27 +7,28 @@ using UnityEngine;
 
 namespace Automatics.AutomaticMapping
 {
-    // Per-MineRock5 snapshot of child colliders, pin center, and max
-    // height taken once at Awake. Scan and destroy paths read the
-    // snapshot instead of calling MineRock5.NonDestroyed and
-    // GetComponentsInChildren<Collider> each tick. The snapshot stays
-    // valid for the object's lifetime: vanilla only toggles m_destroyed
-    // on hit areas, it never mutates the collider hierarchy. Freezing
-    // the center at Awake also keeps the destroy path from reading
-    // Collider.bounds after DamageArea has deactivated children —
-    // inactive colliders report empty bounds at the origin, which would
-    // skew Map.RemovePin toward the wrong pin.
+    // Per-MineRock5 snapshot of vanilla hit-area colliders, pin center,
+    // and max height taken once at Awake. Scan and destroy paths read the
+    // snapshot instead of GetComponentsInChildren<Collider> each tick.
+    // Freezing the bounds keeps scan-time reads away from colliders that
+    // DamageArea later deactivates — inactive colliders report empty
+    // bounds at the origin, which would skew the pin position.
     internal static class MineRock5Cache
     {
         internal readonly struct Snapshot
         {
             public readonly Collider[] Colliders;
+            public readonly Vector3[] Centers;
+            public readonly float[] MaxHeights;
             public readonly Vector3 Center;
             public readonly float MaxHeight;
 
-            public Snapshot(Collider[] colliders, Vector3 center, float maxHeight)
+            public Snapshot(Collider[] colliders, Vector3[] centers, float[] maxHeights,
+                Vector3 center, float maxHeight)
             {
                 Colliders = colliders;
+                Centers = centers;
+                MaxHeights = maxHeights;
                 Center = center;
                 MaxHeight = maxHeight;
             }
@@ -35,45 +37,14 @@ namespace Automatics.AutomaticMapping
         }
 
         private static readonly Collider[] EmptyColliders = Array.Empty<Collider>();
+        private static readonly Vector3[] EmptyCenters = Array.Empty<Vector3>();
+        private static readonly float[] EmptyMaxHeights = Array.Empty<float>();
         private static readonly Snapshot EmptySnapshot =
-            new Snapshot(EmptyColliders, Vector3.zero, float.MinValue);
+            new Snapshot(EmptyColliders, EmptyCenters, EmptyMaxHeights, Vector3.zero,
+                float.MinValue);
 
         private static readonly Dictionary<MineRock5, Snapshot> Snapshots
             = new Dictionary<MineRock5, Snapshot>();
-
-        private static Func<MineRock5, bool> _nonDestroyed;
-        private static bool _delegateInitialized;
-
-        public static void InitializeDelegate()
-        {
-            if (_delegateInitialized) return;
-            _delegateInitialized = true;
-
-            try
-            {
-                var method = AccessTools.DeclaredMethod(typeof(MineRock5), "NonDestroyed");
-                _nonDestroyed = method != null
-                    ? AccessTools.MethodDelegate<Func<MineRock5, bool>>(method)
-                    : null;
-                if (_nonDestroyed == null)
-                    Automatics.Logger.Warning(() =>
-                        "MineRock5.NonDestroyed not found; falling back to reflection.");
-            }
-            catch (Exception e)
-            {
-                Automatics.Logger.Warning(() =>
-                    $"Failed to bind MineRock5.NonDestroyed delegate; falling back to reflection: {e.Message}");
-                _nonDestroyed = null;
-            }
-        }
-
-        public static bool IsAlive(MineRock5 rock5)
-        {
-            if (!rock5) return false;
-            return _nonDestroyed != null
-                ? _nonDestroyed(rock5)
-                : Reflections.InvokeMethod<bool>(rock5, "NonDestroyed");
-        }
 
         public static void Register(MineRock5 rock5)
         {
@@ -109,35 +80,40 @@ namespace Automatics.AutomaticMapping
             return Snapshots.TryGetValue(rock5, out snapshot);
         }
 
-        // Scan-path helper: rebuild on miss only when the rock is still
-        // alive (gated by IsAlive). The cold path exists for instances
-        // that predate the Awake postfix binding (module init race).
-        // Cache hits are also liveness-checked so a rock whose binding
-        // OnDestroy has not yet fired (e.g. pre-destruction ZDO sync)
-        // cannot feed the scan a stale Awake snapshot and spawn a pin
-        // for a now-destroyed MineRock5.
-        public static bool TryGetOrBuildSnapshotAlive(MineRock5 rock5, out Snapshot snapshot)
+        public static bool TryGetLivePosition(MineRock5 rock5, out Vector3 position,
+            out float maxHeight)
         {
-            if (!rock5)
+            position = Vector3.zero;
+            maxHeight = float.MinValue;
+
+            if (!rock5) return false;
+
+            if (!Snapshots.TryGetValue(rock5, out var snapshot))
             {
-                snapshot = EmptySnapshot;
+                snapshot = BuildSnapshot(rock5);
+                Snapshots[rock5] = snapshot;
+            }
+
+            if (snapshot.ColliderCount == 0) return false;
+
+            var healthData = GetHealthData(rock5);
+            if (healthData.Length == 0)
+                return TryGetLivePosition(snapshot, snapshot.ColliderCount, null, out position,
+                    out maxHeight);
+
+            try
+            {
+                var package = new ZPackage(Convert.FromBase64String(healthData));
+                var healthCount = package.ReadInt();
+                return TryGetLivePosition(snapshot, healthCount, package, out position,
+                    out maxHeight);
+            }
+            catch (Exception e)
+            {
+                Automatics.Logger.Warning(() =>
+                    $"Failed to read MineRock5 health state for mapping: {e.Message}");
                 return false;
             }
-            if (Snapshots.TryGetValue(rock5, out snapshot))
-            {
-                if (IsAlive(rock5)) return true;
-                Snapshots.Remove(rock5);
-                snapshot = EmptySnapshot;
-                return false;
-            }
-            if (!IsAlive(rock5))
-            {
-                snapshot = EmptySnapshot;
-                return false;
-            }
-            snapshot = BuildSnapshot(rock5);
-            Snapshots[rock5] = snapshot;
-            return true;
         }
 
         public static void Clear()
@@ -145,20 +121,87 @@ namespace Automatics.AutomaticMapping
             Snapshots.Clear();
         }
 
+        private static string GetHealthData(MineRock5 rock5)
+        {
+            var zNetView = rock5.GetComponent<ZNetView>();
+            var zdo = zNetView != null ? zNetView.GetZDO() : null;
+            return zdo != null ? zdo.GetString(ZDOVars.s_health) : string.Empty;
+        }
+
+        private static bool TryGetLivePosition(Snapshot snapshot, int healthCount,
+            ZPackage package, out Vector3 position, out float maxHeight)
+        {
+            var count = 0;
+            var sum = Vector3.zero;
+            maxHeight = float.MinValue;
+
+            for (var i = 0; i < snapshot.ColliderCount; i++)
+            {
+                var alive = true;
+                if (package != null && i < healthCount)
+                    alive = package.ReadSingle() > 0f;
+                if (!alive) continue;
+
+                sum += snapshot.Centers[i];
+                if (snapshot.MaxHeights[i] > maxHeight) maxHeight = snapshot.MaxHeights[i];
+                count++;
+            }
+
+            if (count == 0 || sum == Vector3.zero)
+            {
+                position = Vector3.zero;
+                maxHeight = float.MinValue;
+                return false;
+            }
+
+            position = sum / count;
+            return true;
+        }
+
         private static Snapshot BuildSnapshot(MineRock5 rock5)
         {
-            var colliders = rock5.gameObject.GetComponentsInChildren<Collider>() ?? EmptyColliders;
-            if (colliders.Length == 0) return new Snapshot(EmptyColliders, Vector3.zero, float.MinValue);
+            var colliders = GetHitAreaColliders(rock5);
+            if (colliders.Length == 0) return EmptySnapshot;
 
             var sum = Vector3.zero;
             var max = float.MinValue;
+            var centers = new Vector3[colliders.Length];
+            var maxHeights = new float[colliders.Length];
             for (var i = 0; i < colliders.Length; i++)
             {
                 var bounds = colliders[i].bounds;
-                sum += bounds.center;
-                if (bounds.max.y > max) max = bounds.max.y;
+                centers[i] = bounds.center;
+                maxHeights[i] = bounds.max.y;
+                sum += centers[i];
+                if (maxHeights[i] > max) max = maxHeights[i];
             }
-            return new Snapshot(colliders, sum / colliders.Length, max);
+            return new Snapshot(colliders, centers, maxHeights, sum / colliders.Length, max);
+        }
+
+        private static Collider[] GetHitAreaColliders(MineRock5 rock5)
+        {
+            var hitAreas = Reflections.GetField<IList>(rock5, "m_hitAreas");
+            if (hitAreas == null || hitAreas.Count == 0) return EmptyColliders;
+
+            var colliders = new Collider[hitAreas.Count];
+            var count = 0;
+            for (var i = 0; i < hitAreas.Count; i++)
+            {
+                var hitArea = hitAreas[i];
+                if (hitArea == null) continue;
+
+                var colliderField = AccessTools.Field(hitArea.GetType(), "m_collider");
+                var collider = colliderField?.GetValue(hitArea) as Collider;
+                if (!collider) continue;
+
+                colliders[count++] = collider;
+            }
+
+            if (count == 0) return EmptyColliders;
+            if (count == colliders.Length) return colliders;
+
+            Array.Resize(ref colliders, count);
+            return colliders;
         }
     }
 }

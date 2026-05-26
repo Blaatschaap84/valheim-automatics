@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+failures=0
+mapping_file="Automatics/AutomaticMapping/AutomaticMapping.cs"
+flora_file="Automatics/AutomaticMapping/FloraNetwork.cs"
+
+fail() {
+  printf 'FAIL: %s\n' "$*" >&2
+  failures=$((failures + 1))
+}
+
+require_source_pattern() {
+  local file="$1"
+  local pattern="$2"
+  local message="$3"
+
+  if ! rg -q "$pattern" "$file"; then
+    fail "$message"
+  fi
+}
+
+reject_source_pattern() {
+  local file="$1"
+  local pattern="$2"
+  local message="$3"
+
+  if rg -q "$pattern" "$file"; then
+    fail "$message"
+  fi
+}
+
+require_mineral_validation_before_seen() {
+  local validation_line
+  local seen_line
+
+  validation_line="$(
+    awk '
+      /private static bool MineralMapping/ { in_function = 1 }
+      in_function && /TryGetMineralPosition/ { print NR; exit }
+      in_function && /^        private static/ && !/MineralMapping/ { exit }
+    ' "$mapping_file"
+  )"
+  seen_line="$(
+    awk '
+      /private static bool MineralMapping/ { in_function = 1 }
+      in_function && /TryGetCachedPin\(identify/ { print NR; exit }
+      in_function && /^        private static/ && !/MineralMapping/ { exit }
+    ' "$mapping_file"
+  )"
+
+  if [[ -z "$validation_line" || -z "$seen_line" ]]; then
+    fail "mineral mapping must contain both liveness validation and cached-pin handling"
+    return
+  fi
+
+  if ((validation_line >= seen_line)); then
+    fail "mineral cached pins must be marked seen only after liveness validation"
+  fi
+}
+
+require_source_pattern \
+  "$flora_file" \
+  "Network == null && node\\.Network == null" \
+  "flora network construction must explicitly handle two uninitialized nodes"
+require_source_pattern \
+  "$flora_file" \
+  "node\\.Network = Network" \
+  "flora network construction must assign the created network to the neighboring node"
+require_source_pattern \
+  "$flora_file" \
+  "Network\\.AddNode\\(node\\)" \
+  "flora network construction must add the neighboring node to the created network"
+reject_source_pattern \
+  "$flora_file" \
+  "base\\.Awake\\(\\)" \
+  "flora nodes must not schedule the generic ObjectNode network construction"
+
+require_mineral_validation_before_seen
+require_source_pattern \
+  "$mapping_file" \
+  "MineRock5Cache\\.TryGetLivePosition" \
+  "MineRock5 mapping must use live hit-area liveness instead of full NonDestroyed snapshots"
+require_source_pattern \
+  "Automatics/AutomaticMapping/MineRock5Cache.cs" \
+  "package\\.ReadSingle\\(\\) > 0f" \
+  "MineRock5 mapping must treat any live saved hit area as live"
+require_source_pattern \
+  "Automatics/AutomaticMapping/MineRock5Cache.cs" \
+  "Reflections\\.GetField<IList>\\(rock5, \"m_hitAreas\"\\)" \
+  "MineRock5 snapshots must follow vanilla m_hitAreas health indexing"
+require_source_pattern \
+  "Automatics/AutomaticMapping/MineRock5Cache.cs" \
+  "AccessTools\\.Field\\(hitArea\\.GetType\\(\\), \"m_collider\"\\)" \
+  "MineRock5 snapshots must read the collider from each vanilla hit-area entry"
+reject_source_pattern \
+  "Automatics/AutomaticMapping/MineRock5Cache.cs" \
+  "GetComponentsInChildren<Collider>\\(true\\)|NonDestroyed|TryGetOrBuildSnapshotAlive" \
+  "MineRock5 mapping must not use includeInactive collider enumeration or full-health NonDestroyed liveness"
+require_source_pattern \
+  "$mapping_file" \
+  "TryGetMineRockPosition" \
+  "MineRock mapping must use a live-hit-area position helper"
+require_source_pattern \
+  "$mapping_file" \
+  "AddColliderBounds\\(collider, ref sum, ref maxHeight, ref count\\)" \
+  "MineRock mapping must aggregate live hit-area bounds directly"
+reject_source_pattern \
+  "$mapping_file" \
+  "var liveColliders = new List<Collider>\\(\\)|liveColliders\\.ToArray\\(\\)" \
+  "MineRock mapping should not allocate a live collider list on every scan"
+require_source_pattern \
+  "$mapping_file" \
+  "zdo\\.GetFloat\\(\"Health\" \\+ i, rock\\.m_health\\) <= 0f\\) continue" \
+  "MineRock mapping must skip dead hit areas and keep live ones"
+reject_source_pattern \
+  "$mapping_file" \
+  "GetFloat\\(\"Health\" \\+ i, rock\\.m_health\\) <= 0f\\)[[:space:]]*return empty" \
+  "MineRock mapping must not treat one dead hit area as an entirely dead rock"
+
+if git diff --name-only -- Automatics/Libraries/mod-utils | rg -q .; then
+  fail "P8 must not edit files directly under Automatics/Libraries/mod-utils"
+fi
+
+if ((failures > 0)); then
+  exit 1
+fi
+
+printf 'PASS mapping liveness static invariant checks\n'
