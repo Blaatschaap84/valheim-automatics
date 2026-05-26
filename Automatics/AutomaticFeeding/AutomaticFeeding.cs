@@ -66,14 +66,13 @@ namespace Automatics.AutomaticFeeding
         private bool CancelAttackOnFeedBox(StaticTarget target)
         {
             if (!HasNetworkOwnership()) return false;
-            if (!_character.IsTamed() && !Logics.IsAllowToFeedFromContainer(AnimalType.Wild))
-                return false;
+            var animalType = _character.IsTamed() ? AnimalType.Tamed : AnimalType.Wild;
+            if (!Logics.IsAllowToFeedFromContainer(animalType)) return false;
 
             var container = target.GetComponentInChildren<Container>();
             if (container == null) return false;
 
-            return ReferenceEquals(container, _closestFeedBox) ||
-                   container.GetInventory().GetAllItems().Any(CanConsume);
+            return container.GetInventory().GetAllItems().Any(CanConsume);
         }
 
         private bool Feeding(Humanoid humanoid, float delta)
