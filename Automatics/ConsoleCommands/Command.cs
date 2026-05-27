@@ -5,6 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using NDesk.Options;
 
 namespace Automatics.ConsoleCommands
@@ -33,6 +34,30 @@ namespace Automatics.ConsoleCommands
 
         protected bool HaveExtraOption { get; set; }
         protected bool HaveExtraDescription { get; set; }
+
+        protected sealed class TextFilter
+        {
+            private readonly Regex _regex;
+            private readonly string _value;
+
+            public TextFilter(string value)
+            {
+                _value = value;
+            }
+
+            public TextFilter(Regex regex)
+            {
+                _regex = regex;
+            }
+
+            public bool IsMatch(string value)
+            {
+                if (value == null) return false;
+                return _regex != null
+                    ? _regex.IsMatch(value)
+                    : value.IndexOf(_value, StringComparison.OrdinalIgnoreCase) >= 0;
+            }
+        }
 
         protected Command(string command)
         {
@@ -122,8 +147,7 @@ namespace Automatics.ConsoleCommands
             }
             catch (OptionException e)
             {
-                args.Context.AddString($"{command}:");
-                args.Context.AddString(e.Message);
+                AddCommandError(args, e.Message);
                 args.Context.AddString(
                     Automatics.L10N.LocalizeTextOnly("@command_common_option_parse_error",
                         command));
@@ -134,6 +158,39 @@ namespace Automatics.ConsoleCommands
 
             args.Context.AddString(Help());
             return false;
+        }
+
+        protected void AddCommandError(Terminal.ConsoleEventArgs args, string message)
+        {
+            args.Context.AddString($"{command}:");
+            args.Context.AddString(message);
+        }
+
+        protected bool TryCreateTextFilter(Terminal.ConsoleEventArgs args, string value,
+            out TextFilter filter)
+        {
+            filter = null;
+            if (string.IsNullOrEmpty(value)) return true;
+
+            if (!value.StartsWith("r/", StringComparison.OrdinalIgnoreCase))
+            {
+                filter = new TextFilter(value);
+                return true;
+            }
+
+            var pattern = value.Substring(2);
+            try
+            {
+                filter = new TextFilter(new Regex(pattern));
+                return true;
+            }
+            catch (ArgumentException e)
+            {
+                AddCommandError(args,
+                    Automatics.L10N.LocalizeTextOnly("@command_common_invalid_regex", pattern,
+                        e.Message));
+                return false;
+            }
         }
 
         protected string Usage()

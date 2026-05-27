@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
 using Automatics.AutomaticMapping;
 using Automatics.Valheim;
 using ModUtils;
@@ -24,6 +23,8 @@ namespace Automatics.ConsoleCommands
         private int _number;
         private string _include;
         private string _exclude;
+        private Player _localPlayer;
+        private ZoneSystem _zoneSystem;
 
         public PrintObjects() : base("printobjects")
         {
@@ -31,28 +32,12 @@ namespace Automatics.ConsoleCommands
             HaveExtraDescription = true;
         }
 
-        private static (bool IsValid, bool IsRegex, string Value) CreateFilter(string arg)
+        private static bool MatchesFilter(string name, TextFilter filter)
         {
-            if (string.IsNullOrEmpty(arg)) return (false, false, "");
-            return arg.StartsWith("r/", StringComparison.OrdinalIgnoreCase)
-                ? (true, true, arg.Substring(2))
-                : (true, false, arg);
-        }
-
-        private static bool MatchesFilter(string name,
-            (bool IsValid, bool IsRegex, string Value) filter)
-        {
-            var match = filter.IsRegex
-                ? Regex.IsMatch(name, filter.Value)
-                : name.IndexOf(filter.Value, StringComparison.OrdinalIgnoreCase) >= 0;
-            if (match) return true;
+            if (filter.IsMatch(name)) return true;
 
             var localized = Automatics.L10N.TranslateInternalName(name);
-            if (name != localized)
-                match = filter.IsRegex
-                    ? Regex.IsMatch(localized, filter.Value)
-                    : localized.IndexOf(filter.Value, StringComparison.OrdinalIgnoreCase) >= 0;
-            return match;
+            return name != localized && filter.IsMatch(localized);
         }
 
         private static void PrintLine(Terminal.ConsoleEventArgs args, string message)
@@ -118,6 +103,8 @@ namespace Automatics.ConsoleCommands
             _number = 4;
             _include = "";
             _exclude = "";
+            _localPlayer = null;
+            _zoneSystem = null;
         }
 
         protected override void CommandAction(Terminal.ConsoleEventArgs args)
@@ -130,39 +117,72 @@ namespace Automatics.ConsoleCommands
             switch (type)
             {
                 case "animal":
+                    if (!TryGetLocalPlayer(args)) return;
                     PrintAnimal(args);
                     return;
                 case "monster":
+                    if (!TryGetLocalPlayer(args)) return;
                     PrintMonster(args);
                     return;
                 case "flora":
+                    if (!TryGetLocalPlayer(args)) return;
                     PrintFlora(args);
                     return;
                 case "mineral":
+                    if (!TryGetLocalPlayer(args)) return;
                     PrintMineral(args);
                     return;
                 case "spawner":
+                    if (!TryGetLocalPlayer(args)) return;
                     PrintSpawner(args);
                     return;
                 case "vehicle":
+                    if (!TryGetLocalPlayer(args)) return;
                     PrintVehicle(args);
                     return;
                 case "other":
+                    if (!TryGetLocalPlayer(args)) return;
                     PrintOther(args);
                     return;
                 case "dungeon":
+                    if (!TryGetLocalPlayer(args)) return;
+                    if (!TryGetZoneSystem(args)) return;
                     PrintDungeon(args);
                     return;
                 case "spot":
+                    if (!TryGetLocalPlayer(args)) return;
+                    if (!TryGetZoneSystem(args)) return;
                     PrintSpot(args);
                     return;
                 case "door":
+                    if (!TryGetLocalPlayer(args)) return;
                     PrintDoor(args);
                     return;
                 case "container":
+                    if (!TryGetLocalPlayer(args)) return;
                     PrintContainer(args);
                     return;
             }
+        }
+
+        private bool TryGetLocalPlayer(Terminal.ConsoleEventArgs args)
+        {
+            _localPlayer = Player.m_localPlayer;
+            if (_localPlayer) return true;
+
+            AddCommandError(args,
+                Automatics.L10N.Translate("@command_printobjects_error_player_unavailable"));
+            return false;
+        }
+
+        private bool TryGetZoneSystem(Terminal.ConsoleEventArgs args)
+        {
+            _zoneSystem = ZoneSystem.instance;
+            if (_zoneSystem && _zoneSystem.m_locationInstances != null) return true;
+
+            AddCommandError(args,
+                Automatics.L10N.Translate("@command_printobjects_error_world_unavailable"));
+            return false;
         }
 
         private void PrintObject(Terminal.ConsoleEventArgs args, string type,
@@ -175,12 +195,12 @@ namespace Automatics.ConsoleCommands
             var objectType =
                 Automatics.L10N.Translate($"@command_printobjects_message_type_{type}");
 
-            var include = CreateFilter(_include);
-            var exclude = CreateFilter(_exclude);
+            if (!TryCreateTextFilter(args, _include, out var includeFilter)) return;
+            if (!TryCreateTextFilter(args, _exclude, out var excludeFilter)) return;
 
             var knownNames = new HashSet<string>();
             var count = 0;
-            var origin = Player.m_localPlayer.transform.position;
+            var origin = _localPlayer.transform.position;
             foreach (var (obj, distance) in from x in objects
                      let distance = Vector3.Distance(origin, x.transform.position)
                      where distance < _radius && predicate.Invoke(x)
@@ -190,8 +210,8 @@ namespace Automatics.ConsoleCommands
                 var name = Objects.GetName(obj);
                 if (!knownNames.Add(name)) continue;
 
-                if (include.IsValid && !MatchesFilter(name, include)) continue;
-                if (exclude.IsValid && MatchesFilter(name, exclude)) continue;
+                if (includeFilter != null && !MatchesFilter(name, includeFilter)) continue;
+                if (excludeFilter != null && MatchesFilter(name, excludeFilter)) continue;
 
                 if (++count > _number) continue;
 
@@ -291,8 +311,8 @@ namespace Automatics.ConsoleCommands
 
             var count = 0;
             var knownNames = new HashSet<string>();
-            var origin = Player.m_localPlayer.transform.position;
-            foreach (var location in from x in ZoneSystem.instance
+            var origin = _localPlayer.transform.position;
+            foreach (var location in from x in _zoneSystem
                          .m_locationInstances.Values
                      where Vector3.Distance(origin, x.m_position) < _radius
                      select x)
@@ -354,8 +374,8 @@ namespace Automatics.ConsoleCommands
 
             var count = 0;
             var knownNames = new HashSet<string>();
-            var origin = Player.m_localPlayer.transform.position;
-            foreach (var (location, distance) in from x in ZoneSystem.instance
+            var origin = _localPlayer.transform.position;
+            foreach (var (location, distance) in from x in _zoneSystem
                          .m_locationInstances.Values
                      let distance = Vector3.Distance(origin, x.m_position)
                      where distance < _radius
@@ -434,7 +454,7 @@ namespace Automatics.ConsoleCommands
 
             var result = new List<MonoBehaviour>(4096);
 
-            var origin = Player.m_localPlayer.transform.position;
+            var origin = _localPlayer.transform.position;
             var size = Physics.OverlapBoxNonAlloc(origin,
                 new Vector3(_radius, _radius, _radius), ColliderBuffer);
             for (var i = 0; i < size; i++)

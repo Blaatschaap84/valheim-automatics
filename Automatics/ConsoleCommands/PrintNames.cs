@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
 using ModUtils;
 
 namespace Automatics.ConsoleCommands
@@ -20,24 +19,19 @@ namespace Automatics.ConsoleCommands
 
             Automatics.Logger.Message(() => $"Command exec: {args.FullLine}");
 
-            var filters = extraOptions.Select(arg =>
-                    arg.StartsWith("r/", StringComparison.OrdinalIgnoreCase)
-                        ? (Regex: true, Value: arg.Substring(2))
-                        : (Regex: false, Value: arg))
-                .ToList();
+            var filters = new List<TextFilter>();
+            foreach (var arg in extraOptions)
+            {
+                if (!TryCreateTextFilter(args, arg, out var filter)) return;
+                if (filter != null) filters.Add(filter);
+            }
+
             foreach (var (key, value) in from translation in GetAllTranslations()
                      let key = translation.Key.StartsWith("automatics_")
                          ? $"@{translation.Key.Substring(11)}"
                          : $"${translation.Key}"
                      let value = translation.Value
-                     where filters.All(filter =>
-                         filter.Regex
-                             ? Regex.IsMatch(key, filter.Value) ||
-                               Regex.IsMatch(value, filter.Value)
-                             : key.IndexOf(filter.Value, StringComparison.OrdinalIgnoreCase) >=
-                               0 ||
-                               value.IndexOf(filter.Value,
-                                   StringComparison.OrdinalIgnoreCase) >= 0)
+                     where filters.All(filter => filter.IsMatch(key) || filter.IsMatch(value))
                      select (key, value))
             {
                 var text =
