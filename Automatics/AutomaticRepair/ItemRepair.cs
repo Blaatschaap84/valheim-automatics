@@ -38,9 +38,17 @@ namespace Automatics.AutomaticRepair
 
         private static int RepairAll(Player player, CraftingStation station)
         {
+            if (!CanUseRepairStation(player, station)) return 0;
+
             WornItemsBuffer.Clear();
             player.GetInventory().GetWornItems(WornItemsBuffer);
             return WornItemsBuffer.Count(x => RepairOne(player, station, x));
+        }
+
+        private static bool CanUseRepairStation(Player player, CraftingStation station)
+        {
+            return player.NoCostCheat() && station == null ||
+                   station != null && station.CheckUsable(player, false);
         }
 
         private static bool RepairOne(Player player, CraftingStation station,
@@ -60,15 +68,19 @@ namespace Automatics.AutomaticRepair
         {
             if (!item.m_shared.m_canBeReparied) return false;
             if (player.NoCostCheat()) return true;
+            if (station == null) return false;
 
             var recipe = ObjectDB.instance.GetRecipe(item);
-            return recipe != null
-                   && (recipe.m_craftingStation != null || recipe.m_repairStation != null)
-                   && ((recipe.m_craftingStation != null &&
-                        recipe.m_craftingStation.m_name == station.m_name) ||
-                       (recipe.m_repairStation != null &&
-                        recipe.m_repairStation.m_name == station.m_name))
-                   && station.GetLevel() >= recipe.m_minStationLevel;
+            if (recipe == null) return false;
+            if (recipe.m_craftingStation == null && recipe.m_repairStation == null) return false;
+
+            var stationMatches =
+                recipe.m_repairStation != null && recipe.m_repairStation.m_name == station.m_name ||
+                recipe.m_craftingStation != null &&
+                recipe.m_craftingStation.m_name == station.m_name;
+            if (!stationMatches && item.m_worldLevel >= Game.m_worldLevel) return false;
+
+            return Mathf.Min(station.GetLevel(), 4) >= recipe.m_minStationLevel;
         }
 
         public static void CraftingStationInteractHook(Player player, CraftingStation station)
@@ -86,6 +98,12 @@ namespace Automatics.AutomaticRepair
         public static void Repair(Player player)
         {
             if (Config.CraftingStationSearchRange <= 0) return;
+
+            if (player.NoCostCheat())
+            {
+                ShowRepairMessage(player, RepairAll(player, null));
+                return;
+            }
 
             var range = Config.CraftingStationSearchRange;
             var origin = player.transform.position;

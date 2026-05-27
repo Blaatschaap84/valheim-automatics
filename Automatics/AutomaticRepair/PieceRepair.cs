@@ -33,24 +33,36 @@ namespace Automatics.AutomaticRepair
         {
             return player.NoCostCheat() || piece.m_craftingStation == null ||
                    CraftingStation.HaveBuildStationInRange(piece.m_craftingStation.m_name,
-                       player.transform.position);
+                       player.transform.position) ||
+                   ZoneSystem.instance != null &&
+                   ZoneSystem.instance.GetGlobalKey(GlobalKeys.NoWorkbench);
         }
 
-        private static bool IsBuildTool(ItemDrop.ItemData item)
+        private static bool IsRepairAction(Player player, ItemDrop.ItemData item)
         {
-            return item?.m_shared?.m_buildPieces != null;
+            var selectedPiece = player.GetSelectedPiece();
+            return item?.m_shared?.m_buildPieces != null && selectedPiece != null &&
+                   selectedPiece.m_repairPiece;
         }
 
-        private static bool TryGetBuildTool(Player player, out ItemDrop.ItemData tool)
+        private static bool TryGetRepairTool(Player player, out ItemDrop.ItemData tool)
         {
             tool = Reflections.InvokeMethod<ItemDrop.ItemData>(player, "GetRightItem");
-            if (IsBuildTool(tool)) return true;
+            return IsRepairAction(player, tool);
+        }
 
-            tool = Reflections.InvokeMethod<ItemDrop.ItemData>(player, "GetLeftItem");
-            if (IsBuildTool(tool)) return true;
+        private static float GetBuildStamina(Player player, ItemDrop.ItemData tool)
+        {
+            var stamina = tool.m_shared.m_attack.m_attackStamina;
+            stamina *= 1f + player.GetEquipmentHomeItemModifier();
+            player.GetSEMan().ModifyHomeItemStaminaUsage(stamina, ref stamina);
 
-            tool = player.GetCurrentWeapon();
-            return IsBuildTool(tool);
+            var skill = tool.m_shared.m_buildPieces.m_skill;
+            if (skill == Skills.SkillType.None) return stamina;
+
+            var skillFactor = player.GetSkillFactor(skill);
+            stamina -= stamina * 0.5f * skillFactor;
+            return stamina;
         }
 
         private static object[] TryCreateRadiusMethodArguments(MethodInfo method, Vector3 origin,
@@ -149,7 +161,7 @@ namespace Automatics.AutomaticRepair
         public static void Repair(Player player)
         {
             if (Config.PieceSearchRange <= 0) return;
-            if (!TryGetBuildTool(player, out var tool)) return;
+            if (!TryGetRepairTool(player, out var tool)) return;
 
             var toolData = tool.m_shared;
 
@@ -163,10 +175,15 @@ namespace Automatics.AutomaticRepair
                 if (!PrivateArea.CheckAccess(position) || !CheckCanRepairPiece(player, piece))
                     continue;
 
+                if (!player.HaveStamina(toolData.m_attack.m_attackStamina)) break;
+
                 var wearNTear = piece.GetComponent<WearNTear>();
                 if (wearNTear == null || !wearNTear.Repair()) continue;
 
                 piece.m_placeEffect.Create(position, piece.transform.rotation);
+
+                player.UseStamina(GetBuildStamina(player, tool));
+                player.UseEitr(toolData.m_attack.m_attackEitr);
                 if (toolData.m_useDurability)
                     tool.m_durability -= toolData.m_useDurabilityDrain;
 
