@@ -97,6 +97,7 @@ namespace Automatics.AutomaticMapping
 
         public static void OnRemovePin(Minimap.PinData pinData)
         {
+            Map.UntrackAutomaticPin(pinData);
             PinIndex.Untrack(pinData);
             Navigation.OnRemovePin(pinData);
             DynamicObjectMapping.OnRemovePin(pinData);
@@ -435,6 +436,7 @@ namespace Automatics.AutomaticMapping
         {
             if (!RemovePinFromCache(pinData)) return false;
 
+            Map.UntrackAutomaticPin(pinData);
             pinData.m_save = true;
             Player.m_localPlayer?.Message(MessageHud.MessageType.Center,
                 Automatics.L10N.Localize("@message_automatic_mapping_pin_saved",
@@ -729,6 +731,8 @@ namespace Automatics.AutomaticMapping
 
         private static void CacheVehiclePin(ZDOID uniqueId, Minimap.PinData pinData)
         {
+            Map.TrackAutomaticPin(pinData);
+
             if (VehiclePinCache.TryGetValue(uniqueId, out var existing) &&
                 !ReferenceEquals(existing, pinData))
                 VehiclePinKeyCache.Remove(existing);
@@ -874,6 +878,8 @@ namespace Automatics.AutomaticMapping
 
         private static void AddPin(ZDOID uniqueId, Vector3 pos, string pinName, Target target)
         {
+            if (Map.ShouldSuppressTransientAutomaticPin(pos)) return;
+
             var pinData = Map.AddPin(pos, pinName, false, target);
             if (PinDataCache.TryGetValue(uniqueId, out var data) && !ReferenceEquals(data, pinData))
             {
@@ -900,9 +906,23 @@ namespace Automatics.AutomaticMapping
             return true;
         }
 
+        public static bool OwnsPin(Minimap.PinData pinData)
+        {
+            return pinData != null &&
+                   (PinKeyCache.ContainsKey(pinData) ||
+                    VehiclePinKeyCache.ContainsKey(pinData));
+        }
+
         private static void UpdatePin(ZDOID uniqueId, Minimap.PinData pinData, string pinName, Vector3 pos,
             float delta)
         {
+            if (Map.ShouldSuppressTransientAutomaticPin(pos))
+            {
+                RemovePinFromCache(pinData);
+                Map.RemovePin(pinData);
+                return;
+            }
+
             // The empty-name guard preserves intentionally blank pins
             // (CreaturePinTextHidden etc). The ref-equality check skips the
             // write when the memoized pin name is the same instance the
@@ -1243,6 +1263,7 @@ namespace Automatics.AutomaticMapping
         {
             if (!RemovePinFromCache(pinData)) return false;
 
+            Map.UntrackAutomaticPin(pinData);
             pinData.m_save = true;
             Player.m_localPlayer?.Message(MessageHud.MessageType.Center,
                 Automatics.L10N.Localize("@message_automatic_mapping_pin_saved",
@@ -2166,14 +2187,17 @@ namespace Automatics.AutomaticMapping
             }
 
             var pos = network.Center;
-            if (Map.GetClosestPin(pos) != null) return true;
+            if (Map.GetClosestPin(pos,
+                    includeInactive: Config.HideUnexploredAutomaticMappingPins) != null)
+                return true;
 
             var pinName = ComputeFloraPinName(displayName, network.NodeCount);
             var pinData = AddPin(uniqueId, pos, pinName, Config.SaveStaticObjectPins,
                 CreateTarget(component.gameObject, displayName), PinKind.Flora, data.Identifier,
                 sourceToken, PinSourceDomain.Component);
-            CachePin(FloraNodesBuffer, pinData, PinKind.Flora, data.Identifier, sourceToken,
-                PinSourceDomain.Component);
+            if (pinData != null)
+                CachePin(FloraNodesBuffer, pinData, PinKind.Flora, data.Identifier, sourceToken,
+                    PinSourceDomain.Component);
             return true;
         }
 
@@ -2217,6 +2241,14 @@ namespace Automatics.AutomaticMapping
 
             if (canonical != null)
             {
+                if (!canonical.m_save && Map.ShouldSuppressTransientAutomaticPin(center))
+                {
+                    RemovePinFromCache(canonical);
+                    Map.RemovePin(canonical);
+                    OwnedFloraPinsScratch.Clear();
+                    return;
+                }
+
                 Map.MovePin(canonical, center);
                 canonical.m_name = pinName;
                 // Drop the canonical pin's previously cached keys before
@@ -2232,12 +2264,14 @@ namespace Automatics.AutomaticMapping
                 CachePin(FloraNodesBuffer, canonical, PinKind.Flora, identifier, sourceToken,
                     PinSourceDomain.Component);
             }
-            else if (Map.GetClosestPin(center) == null)
+            else if (Map.GetClosestPin(center,
+                         includeInactive: Config.HideUnexploredAutomaticMappingPins) == null)
             {
-                var newPin = Map.AddPin(center, pinName, Config.SaveStaticObjectPins,
+                var newPin = AddStaticPin(center, pinName, Config.SaveStaticObjectPins,
                     CreateTarget(component.gameObject, displayName));
-                CachePin(FloraNodesBuffer, newPin, PinKind.Flora, identifier, sourceToken,
-                    PinSourceDomain.Component);
+                if (newPin != null)
+                    CachePin(FloraNodesBuffer, newPin, PinKind.Flora, identifier, sourceToken,
+                        PinSourceDomain.Component);
             }
 
             OwnedFloraPinsScratch.Clear();
@@ -2272,7 +2306,9 @@ namespace Automatics.AutomaticMapping
                 return true;
             }
 
-            if (Map.GetClosestPin(pos) != null) return true;
+            if (Map.GetClosestPin(pos,
+                    includeInactive: Config.HideUnexploredAutomaticMappingPins) != null)
+                return true;
 
             if (Config.NeedToEquipWishboneForUndergroundMinerals)
                 if (maxHeight < ZoneSystem.instance.GetGroundHeight(pos))
@@ -2386,7 +2422,8 @@ namespace Automatics.AutomaticMapping
                 name = label;
 
             var position = component.transform.position;
-            if (Map.GetClosestPin(position) == null)
+            if (Map.GetClosestPin(position,
+                    includeInactive: Config.HideUnexploredAutomaticMappingPins) == null)
                 AddPin(uniqueId, position, name, CreateTarget(component.gameObject, name),
                     PinKind.Spawner, data.Identifier, sourceToken, PinSourceDomain.Component);
 
@@ -2410,7 +2447,8 @@ namespace Automatics.AutomaticMapping
                 name = label;
 
             var position = component.transform.position;
-            if (Map.GetClosestPin(position) == null)
+            if (Map.GetClosestPin(position,
+                    includeInactive: Config.HideUnexploredAutomaticMappingPins) == null)
                 AddPin(uniqueId, position, name, CreateTarget(component.gameObject, name),
                     PinKind.Other, data.Identifier, sourceToken, PinSourceDomain.Component);
 
@@ -2506,7 +2544,8 @@ namespace Automatics.AutomaticMapping
                     return true;
                 }
 
-                if (Map.GetClosestPin(entrance) == null)
+                if (Map.GetClosestPin(entrance,
+                        includeInactive: Config.HideUnexploredAutomaticMappingPins) == null)
                     AddPin(ZDOID.None, entrance, name, CreateTarget(prefabName, name),
                         PinKind.Dungeon, data.Identifier, prefabName, PinSourceDomain.Location);
 
@@ -2520,7 +2559,8 @@ namespace Automatics.AutomaticMapping
                 return true;
             }
 
-            if (Map.GetClosestPin(pos, radius, x => x.m_name == name) == null)
+            if (Map.GetClosestPin(pos, radius, x => x.m_name == name,
+                    includeInactive: Config.HideUnexploredAutomaticMappingPins) == null)
             {
                 AddPin(ZDOID.None, pos, name, CreateTarget(prefabName, name), PinKind.Dungeon,
                     data.Identifier, prefabName, PinSourceDomain.Location);
@@ -2547,7 +2587,8 @@ namespace Automatics.AutomaticMapping
             if (!ValheimObject.Spot.GetName(data.Identifier, out var name))
                 name = $"@location_{prefabName.ToLower()}";
 
-            if (Map.GetClosestPin(pos) == null)
+            if (Map.GetClosestPin(pos,
+                    includeInactive: Config.HideUnexploredAutomaticMappingPins) == null)
                 AddPin(ZDOID.None, pos, name, CreateTarget(prefabName, name), PinKind.Spot,
                     data.Identifier, prefabName, PinSourceDomain.Location);
 
@@ -2558,7 +2599,9 @@ namespace Automatics.AutomaticMapping
             Target target, PinKind kind, string identifier, string sourceToken,
             PinSourceDomain domain)
         {
-            var pinData = Map.AddPin(pos, pinName, save, target);
+            var pinData = AddStaticPin(pos, pinName, save, target);
+            if (pinData == null) return null;
+
             var identify = uniqueId.IsNone()
                 ? new MapPinIdentify(pos)
                 : new MapPinIdentify(uniqueId);
@@ -2571,6 +2614,14 @@ namespace Automatics.AutomaticMapping
 
             CachePin(identify, pinData, kind, identifier, sourceToken, domain);
             return pinData;
+        }
+
+        private static Minimap.PinData AddStaticPin(Vector3 pos, string pinName, bool save,
+            Target target)
+        {
+            return !save && Map.ShouldSuppressTransientAutomaticPin(pos)
+                ? null
+                : Map.AddPin(pos, pinName, save, target);
         }
 
         private static void AddPin(ZDOID uniqueId, Vector3 pos, string pinName, Target target,
@@ -2639,6 +2690,8 @@ namespace Automatics.AutomaticMapping
         private static void CachePin(MapPinIdentify identify, Minimap.PinData pinData,
             PinKind kind, string identifier, string sourceToken, PinSourceDomain domain)
         {
+            Map.TrackAutomaticPin(pinData);
+
             if (PinDataCache.TryGetValue(identify, out var existing))
             {
                 if (ReferenceEquals(existing.PinData, pinData))
@@ -2682,6 +2735,11 @@ namespace Automatics.AutomaticMapping
                 PinDataCache.Remove(key);
 
             return true;
+        }
+
+        public static bool OwnsPin(Minimap.PinData pinData)
+        {
+            return pinData != null && PinKeyCache.ContainsKey(pinData);
         }
 
         private static void RemovePinKey(Minimap.PinData pinData, MapPinIdentify identify)

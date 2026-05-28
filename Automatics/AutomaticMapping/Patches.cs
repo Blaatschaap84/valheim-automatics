@@ -171,17 +171,42 @@ namespace Automatics.AutomaticMapping
             IEnumerable<CodeInstruction> instructions, ILGenerator generator)
         {
             /*
+             *   if (Map.ShouldHideAutomaticPin(pin) || !IsPointVisible(pin.m_pos, rawImage) || ...) {
+             *       DestroyPinMarker(pin);
+             *       continue;
+             *   }
+             *
              *   float size = (pin.m_doubleSize ? (num * 2f) : num);
-             * + size = Map.ResizeIcon(pin, size);
+             * + size = IconPack.ResizeIcon(pin, size);
              *   pin.m_uiElement.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, size);
              * ...
              *   float num2 = (pin.m_doubleSize ? (num * 2f) : num);
-             * + num2 = Map.ResizeIcon(pin, num2);
+             * + num2 = IconPack.ResizeIcon(pin, num2);
              *   num2 *= 0.8f + Mathf.Sin(Time.time * 5f) * 0.2f;
              */
-            return new CodeMatcher(instructions, generator)
+            const int pinDataLocalIndex = 6;
+            var destroyPinMarker = AccessTools.Method(typeof(Minimap), "DestroyPinMarker");
+            var matcher = new CodeMatcher(instructions, generator)
+                .MatchStartForward(
+                    new CodeMatch(OpCodes.Ldarg_0),
+                    new CodeMatch(x => IsLocal(x, OpCodes.Ldloc_S, pinDataLocalIndex)),
+                    new CodeMatch(OpCodes.Call, destroyPinMarker))
+                .ThrowIfInvalid("Could not find Minimap.UpdatePins DestroyPinMarker branch.")
+                .CreateLabel(out var destroyHiddenPinLabel)
+                .Start()
+                .MatchEndForward(new CodeMatch(x =>
+                    IsLocal(x, OpCodes.Stloc_S, pinDataLocalIndex)))
+                .ThrowIfInvalid("Could not find Minimap.UpdatePins pin local assignment.")
+                .Advance(1)
+                .InsertAndAdvance(
+                    new CodeInstruction(OpCodes.Ldloc_S, pinDataLocalIndex),
+                    new CodeInstruction(OpCodes.Call,
+                        AccessTools.Method(typeof(Map), nameof(Map.ShouldHideAutomaticPin))),
+                    new CodeInstruction(OpCodes.Brtrue_S, destroyHiddenPinLabel));
+
+            return matcher
                 .MatchEndForward(
-                    new CodeMatch(OpCodes.Ldloc_1),
+                    new CodeMatch(OpCodes.Ldloc_3),
                     new CodeMatch(OpCodes.Ldc_R4, 2f),
                     new CodeMatch(OpCodes.Mul),
                     new CodeMatch(OpCodes.Stloc_S))
@@ -190,7 +215,7 @@ namespace Automatics.AutomaticMapping
                     var numIndex = x.Operand;
                     x.Advance(1);
                     x.InsertAndAdvance(
-                        new CodeInstruction(OpCodes.Ldloc_S, 4),
+                        new CodeInstruction(OpCodes.Ldloc_S, 6),
                         new CodeInstruction(OpCodes.Ldloc_S, numIndex),
                         new CodeInstruction(OpCodes.Call,
                             AccessTools.Method(typeof(IconPack), "ResizeIcon")),
@@ -199,11 +224,52 @@ namespace Automatics.AutomaticMapping
                 .InstructionEnumeration();
         }
 
+        private static bool IsLocal(CodeInstruction instruction, OpCode opcode, int index)
+        {
+            if (instruction.opcode != opcode) return false;
+            switch (instruction.operand)
+            {
+                case LocalBuilder local:
+                    return local.LocalIndex == index;
+                case int localIndex:
+                    return localIndex == index;
+                case byte localIndex:
+                    return localIndex == index;
+                case sbyte localIndex:
+                    return localIndex == index;
+                default:
+                    return false;
+            }
+        }
+
         [HarmonyPrefix]
         [HarmonyPatch(typeof(Minimap), "UpdatePins")]
         private static void Minimap_UpdatePins_Prefix()
         {
             AutomaticMapping.AnimatePins();
+        }
+
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(Minimap), "UpdatePins")]
+        private static void Minimap_UpdatePins_Postfix()
+        {
+            Map.DestroyHiddenAutomaticPinMarkers();
+        }
+
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(Minimap), "Explore", new[] { typeof(Vector3), typeof(float) })]
+        private static void Minimap_Explore_Postfix()
+        {
+            if (Config.HideUnexploredAutomaticMappingPins)
+                Map.RefreshPins();
+        }
+
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(Minimap), nameof(Minimap.AddSharedMapData))]
+        private static void Minimap_AddSharedMapData_Postfix(bool __result)
+        {
+            if (__result && Config.HideUnexploredAutomaticMappingPins)
+                Map.RefreshPins();
         }
 
         [HarmonyPrefix]
@@ -263,6 +329,7 @@ namespace Automatics.AutomaticMapping
         [HarmonyPatch(typeof(Minimap), "ClearPins")]
         private static void Minimap_ClearPins_Postfix()
         {
+            Map.ClearAutomaticPins();
             PinIndex.Clear();
         }
 
@@ -293,6 +360,7 @@ namespace Automatics.AutomaticMapping
             [HarmonyPostfix]
             private static void Postfix()
             {
+                Map.ClearAutomaticPins();
                 PinIndex.Clear();
                 MineRock5Cache.Clear();
             }

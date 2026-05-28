@@ -5,6 +5,9 @@ set -euo pipefail
 failures=0
 mapping_file="Automatics/AutomaticMapping/AutomaticMapping.cs"
 flora_file="Automatics/AutomaticMapping/FloraNetwork.cs"
+map_file="Automatics/AutomaticMapping/Map.cs"
+navigation_file="Automatics/AutomaticMapping/Navigation.cs"
+patches_file="Automatics/AutomaticMapping/Patches.cs"
 
 fail() {
   printf 'FAIL: %s\n' "$*" >&2
@@ -118,6 +121,54 @@ reject_source_pattern \
   "$mapping_file" \
   "GetFloat\\(\"Health\" \\+ i, rock\\.m_health\\) <= 0f\\)[[:space:]]*return empty" \
   "MineRock mapping must not treat one dead hit area as an entirely dead rock"
+require_source_pattern \
+  "$map_file" \
+  "AccessTools\\.Method\\(typeof\\(Minimap\\), \"IsExplored\"" \
+  "unexplored automatic-pin hiding must bind vanilla Minimap.IsExplored centrally"
+require_source_pattern \
+  "$map_file" \
+  "MethodDelegate<Func<Minimap, Vector3, bool>>" \
+  "Minimap.IsExplored binding must be cached instead of reflected per pin"
+require_source_pattern \
+  "$map_file" \
+  "ShouldHideAutomaticPin\\(Minimap\\.PinData pinData\\)" \
+  "automatic-pin visibility filtering must be centralized in Map"
+require_source_pattern \
+  "$map_file" \
+  "IsPersistedAutomaticPin" \
+  "saved automatic pins must be re-tracked after map data reloads"
+require_source_pattern \
+  "$map_file" \
+  "Config\\.HideUnexploredAutomaticMappingPins" \
+  "automatic-pin visibility filtering must be gated by the new config option"
+require_source_pattern \
+  "$patches_file" \
+  "Minimap_UpdatePins_Postfix" \
+  "hidden unexplored automatic pins must be reconciled after vanilla UpdatePins"
+require_source_pattern \
+  "$patches_file" \
+  "ShouldHideAutomaticPin" \
+  "hidden unexplored automatic pins must be filtered before vanilla creates markers"
+require_source_pattern \
+  "$patches_file" \
+  "Minimap_Explore_Postfix" \
+  "exploration updates must refresh hidden automatic pin markers"
+require_source_pattern \
+  "$mapping_file" \
+  "Map\\.ShouldSuppressTransientAutomaticPin\\(pos\\)" \
+  "transient dynamic automatic pins must be suppressed before creation outside explored areas"
+require_source_pattern \
+  "$mapping_file" \
+  "!save && Map\\.ShouldSuppressTransientAutomaticPin\\(pos\\)" \
+  "unsaved static automatic pins must be suppressed before creation outside explored areas"
+require_source_pattern \
+  "$mapping_file" \
+  "includeInactive: Config\\.HideUnexploredAutomaticMappingPins" \
+  "static mapping dedup must see hidden automatic pins only when unexplored-pin hiding is enabled"
+require_source_pattern \
+  "$navigation_file" \
+  "Map\\.ShouldHideAutomaticPin\\(_targetPin\\)" \
+  "navigation targets must clear when an automatic pin becomes hidden"
 
 if git diff --name-only -- Automatics/Libraries/mod-utils | rg -q .; then
   fail "P8 must not edit files directly under Automatics/Libraries/mod-utils"

@@ -71,6 +71,8 @@
     "@config_automatic_mapping_static_object_mapping_range_description": "静的オブジェクトをピン留めする範囲を指定します。静的オブジェクトとは、植物や鉱物などの位置が変化しないオブジェクトのことです。0に設定すると静的オブジェクトのピン留めを無効化します。 (単位: メートル)",
     "@config_automatic_mapping_location_mapping_range_name": "ロケーションのピン留め範囲",
     "@config_automatic_mapping_location_mapping_range_description": "ロケーションをピン留めする範囲を指定します。ロケーションとは、ダンジョンやフューリングの集落などの特定の場所のことです。0に設定するとロケーションのピン留めを無効化します。 (単位: メートル)",
+    "@config_automatic_mapping_hide_unexplored_automatic_mapping_pins_name": "未探索エリア外のピンを非表示",
+    "@config_automatic_mapping_hide_unexplored_automatic_mapping_pins_description": "探索済みマップの外にある自動マッピングのピンを非表示にするか否かを指定します。保存済みピンは削除せず非表示にします。",
     "@config_automatic_mapping_allow_pinning_animal_name": "ピン留めを許可する動物",
     "@config_automatic_mapping_allow_pinning_animal_description": "自動ピン留めの対象となる動物を指定します。",
     "@config_automatic_mapping_allow_pinning_monster_name": "ピン留めを許可するモンスター",

@@ -15,6 +15,7 @@ namespace Automatics.AutomaticMapping
         private static ConfigEntry<int> _dynamicObjectMappingRange;
         private static ConfigEntry<int> _staticObjectMappingRange;
         private static ConfigEntry<int> _locationMappingRange;
+        private static ConfigEntry<bool> _hideUnexploredAutomaticMappingPins;
         private static ConfigEntry<StringList> _allowPinningAnimal;
         private static ConfigEntry<StringList> _allowPinningMonster;
         private static ConfigEntry<StringList> _allowPinningFlora;
@@ -41,6 +42,8 @@ namespace Automatics.AutomaticMapping
         public static int DynamicObjectMappingRange => _dynamicObjectMappingRange.Value;
         public static int StaticObjectMappingRange => _staticObjectMappingRange.Value;
         public static int LocationMappingRange => _locationMappingRange.Value;
+        public static bool HideUnexploredAutomaticMappingPins =>
+            _hideUnexploredAutomaticMappingPins?.Value == true;
         public static StringList AllowPinningAnimal => _allowPinningAnimal.Value;
         public static StringList AllowPinningMonster => _allowPinningMonster.Value;
         public static StringList AllowPinningFlora => _allowPinningFlora.Value;
@@ -102,6 +105,7 @@ namespace Automatics.AutomaticMapping
             _dynamicObjectMappingRange = config.Bind("dynamic_object_mapping_range", 64, (0, 128));
             _staticObjectMappingRange = config.Bind("static_object_mapping_range", 32, (0, 128));
             _locationMappingRange = config.Bind("location_mapping_range", 96, (0, 128));
+            _hideUnexploredAutomaticMappingPins = config.Bind("hide_unexplored_automatic_mapping_pins", false);
             _allowPinningAnimal = config.BindValheimObjectList("allow_pinning_animal", ValheimObject.Animal);
             _allowPinningMonster = config.BindValheimObjectList("allow_pinning_monster", ValheimObject.Monster);
             _allowPinningFlora = config.BindValheimObjectList("allow_pinning_flora",
@@ -138,6 +142,7 @@ namespace Automatics.AutomaticMapping
             // subscribers doing ReferenceEquals checks see the correct registry.
             RefreshAnimalListFlags();
             _allowPinningAnimal.SettingChanged += (_, __) => RefreshAnimalListFlags();
+            _hideUnexploredAutomaticMappingPins.SettingChanged += (_, __) => Map.RefreshPins();
 
             _allowPinningFlora.SettingChanged += (_, __) => StaticAllowlistChanged?.Invoke(ValheimObject.Flora);
             _allowPinningMineral.SettingChanged += (_, __) => StaticAllowlistChanged?.Invoke(ValheimObject.Mineral);

@@ -71,6 +71,8 @@
     "@config_automatic_mapping_static_object_mapping_range_description": "Specify the range of static objects to be explored. \"Static Object\" are objects that do not change their position, such as flora, mineral, etc. Setting this to 0 disables pinning of static objects. (Unit: meter)",
     "@config_automatic_mapping_location_mapping_range_name": "Location Search Range",
     "@config_automatic_mapping_location_mapping_range_description": "Specify the range of location to be explored. \"Location\" is a specific place, such as dungeon, fuling village, etc. Setting this to 0 disables location pinning. (Unit: meter)",
+    "@config_automatic_mapping_hide_unexplored_automatic_mapping_pins_name": "Hide Pins Outside Explored Area",
+    "@config_automatic_mapping_hide_unexplored_automatic_mapping_pins_description": "Hide Automatic Mapping pins whose position is outside the explored map. Saved pins are hidden, not deleted.",
     "@config_automatic_mapping_allow_pinning_animal_name": "Allow Pinning Animal",
     "@config_automatic_mapping_allow_pinning_animal_description": "Specify the animals to be automatic pinning.",
     "@config_automatic_mapping_allow_pinning_monster_name": "Allow Pinning Monster",

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using HarmonyLib;
 using ModUtils;
+using Splatform;
 using UnityEngine;
 
 namespace Automatics.AutomaticMapping
@@ -13,7 +14,10 @@ namespace Automatics.AutomaticMapping
         // return when Minimap.instance is not yet live.
         private static AccessTools.FieldRef<Minimap, List<Minimap.PinData>> _pinsRef;
         private static Action<Minimap> _updatePinsInvoker;
+        private static Func<Minimap, Vector3, bool> _isExploredInvoker;
         private static readonly List<Minimap.PinData> EmptyPinList = new List<Minimap.PinData>();
+        private static readonly HashSet<Minimap.PinData> AutomaticPins =
+            new HashSet<Minimap.PinData>();
 
         private static Minimap ValheimMap => Minimap.instance;
 
@@ -23,7 +27,8 @@ namespace Automatics.AutomaticMapping
             // update that reshapes Minimap.m_pins or renames UpdatePins only
             // disables the affected slot. The Reflections.* fallbacks in
             // GetAllPins / RefreshPins go through Harmony's Traverse wrapper
-            // and tolerate a null cache entry.
+            // and tolerate a null cache entry; IsExplored intentionally fails
+            // closed so unexplored-pin hiding never reveals pins on bind failure.
             if (_pinsRef == null)
             {
                 try
@@ -58,14 +63,40 @@ namespace Automatics.AutomaticMapping
                 }
             }
 
+            if (_isExploredInvoker == null)
+            {
+                try
+                {
+                    var method = AccessTools.Method(typeof(Minimap), "IsExplored",
+                        new[] { typeof(Vector3) });
+                    _isExploredInvoker = method != null
+                        ? AccessTools.MethodDelegate<Func<Minimap, Vector3, bool>>(method)
+                        : null;
+                    if (_isExploredInvoker == null)
+                        Automatics.Logger.Warning(() =>
+                            "Minimap.IsExplored not found; hiding unexplored automatic pins will fail closed.");
+                }
+                catch (Exception e)
+                {
+                    Automatics.Logger.Warning(() =>
+                        $"Failed to bind Minimap.IsExplored delegate; hiding unexplored automatic pins will fail closed: {e.Message}");
+                    _isExploredInvoker = null;
+                }
+            }
+
             // Minimap.Start invokes LoadMapData before this postfix runs,
             // so AddPin_Postfix coverage depends on module load order.
             // Rebuilding from the live list also drops stale PinData
             // references from a prior session.
+            AutomaticPins.Clear();
             PinIndex.Clear();
             var pins = GetAllPins();
             for (var i = 0; i < pins.Count; i++)
+            {
                 PinIndex.Track(pins[i]);
+                if (IsPersistedAutomaticPin(pins[i]))
+                    TrackAutomaticPin(pins[i]);
+            }
         }
 
         public static List<Minimap.PinData> GetAllPins()
@@ -91,7 +122,7 @@ namespace Automatics.AutomaticMapping
         }
 
         public static Minimap.PinData GetClosestPin(Vector3 pos, float radius = 1f,
-            Predicate<Minimap.PinData> predicate = null)
+            Predicate<Minimap.PinData> predicate = null, bool includeInactive = false)
         {
             using (MappingProfiler.BeginScope(MappingProfiler.SlotGetClosestPin))
             {
@@ -111,7 +142,7 @@ namespace Automatics.AutomaticMapping
                     for (var i = 0; i < cellPins.Count; i++)
                     {
                         var pinData = cellPins[i];
-                        if (!IsActive(pinData)) continue;
+                        if (!includeInactive && !IsActive(pinData)) continue;
 
                         var dx = pos.x - pinData.m_pos.x;
                         var dz = pos.z - pinData.m_pos.z;
@@ -128,7 +159,7 @@ namespace Automatics.AutomaticMapping
                 for (var i = 0; i < transients.Count; i++)
                 {
                     var pinData = transients[i];
-                    if (!IsActive(pinData)) continue;
+                    if (!includeInactive && !IsActive(pinData)) continue;
 
                     var dx = pos.x - pinData.m_pos.x;
                     var dz = pos.z - pinData.m_pos.z;
@@ -196,6 +227,104 @@ namespace Automatics.AutomaticMapping
             return AddPin(pos, IconPack.GetPinType(target), name, save);
         }
 
+        public static void TrackAutomaticPin(Minimap.PinData pinData)
+        {
+            if (pinData != null)
+                AutomaticPins.Add(pinData);
+        }
+
+        public static void UntrackAutomaticPin(Minimap.PinData pinData)
+        {
+            if (pinData != null)
+                AutomaticPins.Remove(pinData);
+        }
+
+        public static void ClearAutomaticPins()
+        {
+            AutomaticPins.Clear();
+        }
+
+        public static bool IsExplored(Vector3 pos)
+        {
+            var map = ValheimMap;
+            if (!map || _isExploredInvoker == null) return false;
+            return _isExploredInvoker(map, pos);
+        }
+
+        public static bool ShouldSuppressTransientAutomaticPin(Vector3 pos)
+        {
+            return ShouldFilterAutomaticPinAt(pos);
+        }
+
+        public static bool ShouldHideAutomaticPin(Minimap.PinData pinData)
+        {
+            return pinData != null &&
+                   IsAutomaticPin(pinData) &&
+                   ShouldFilterAutomaticPinAt(pinData.m_pos);
+        }
+
+        public static void DestroyHiddenAutomaticPinMarkers()
+        {
+            if (!ShouldFilterAutomaticPins()) return;
+
+            var pins = GetAllPins();
+            for (var i = 0; i < pins.Count; i++)
+            {
+                var pinData = pins[i];
+                if (pinData == null || !pinData.m_uiElement) continue;
+                if (ShouldHideAutomaticPin(pinData))
+                    DestroyPinMarker(pinData);
+            }
+        }
+
+        private static bool IsAutomaticPin(Minimap.PinData pinData)
+        {
+            return AutomaticPins.Contains(pinData) ||
+                   DynamicObjectMapping.OwnsPin(pinData) ||
+                   StaticObjectMapping.OwnsPin(pinData);
+        }
+
+        private static bool IsPersistedAutomaticPin(Minimap.PinData pinData)
+        {
+            return pinData != null &&
+                   pinData.m_save &&
+                   pinData.m_ownerID == 0L &&
+                   pinData.m_author.IsValid &&
+                   TryGetLocalPlatformUserId(out var userId) &&
+                   pinData.m_author == userId;
+        }
+
+        private static void MarkAutomaticPin(Minimap.PinData pinData)
+        {
+            TrackAutomaticPin(pinData);
+            if (pinData == null || !pinData.m_save) return;
+            if (TryGetLocalPlatformUserId(out var userId))
+                pinData.m_author = userId;
+        }
+
+        private static bool TryGetLocalPlatformUserId(out PlatformUserID userId)
+        {
+            userId = PlatformUserID.None;
+            var platform = PlatformManager.DistributionPlatform;
+            var localUser = platform?.LocalUser;
+            if (localUser == null) return false;
+
+            userId = localUser.PlatformUserID;
+            return userId.IsValid;
+        }
+
+        private static bool ShouldFilterAutomaticPinAt(Vector3 pos)
+        {
+            return ShouldFilterAutomaticPins() && !IsExplored(pos);
+        }
+
+        private static bool ShouldFilterAutomaticPins()
+        {
+            return !Config.ModuleDisabled &&
+                   Config.EnableAutomaticMapping &&
+                   Config.HideUnexploredAutomaticMappingPins;
+        }
+
         /// <summary>
         /// Raw membership check with no UI-active filter, so pins without
         /// a live marker (just added or mid-rebuild) still return
@@ -244,6 +373,7 @@ namespace Automatics.AutomaticMapping
         {
             if (name.StartsWith("@")) name = "$automatics_" + name.Substring(1);
             var pinData = ValheimMap.AddPin(pos, type, name, save, false);
+            MarkAutomaticPin(pinData);
             Automatics.Logger.Debug(() =>
                 $"Add pin: [name: {EscapePinName(name)}, pos: {pinData.m_pos}, icon: {(int)type}]");
             return pinData;

@@ -350,7 +350,7 @@ namespace Automatics.AutomaticMapping
             if (Time.time < _nextTargetPinValidationTime) return;
 
             _nextTargetPinValidationTime = Time.time + TargetPinValidationInterval;
-            if (!Map.ContainsPin(_targetPin))
+            if (!Map.ContainsPin(_targetPin) || Map.ShouldHideAutomaticPin(_targetPin))
                 ClearTarget(false);
         }
 
