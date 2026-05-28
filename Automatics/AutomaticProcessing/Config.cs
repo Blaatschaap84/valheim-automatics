@@ -230,10 +230,6 @@ namespace Automatics.AutomaticProcessing
                         initializer: Initializer("number_of_items_to_stop_charge", displayName));
                 }
             }
-
-            config.ChangeSection("general", 192);
-            config.BindCustomValheimObject("custom_container", Globals.Container);
-
             Action<ConfigurationManagerAttributes> Initializer(string key, string displayName)
             {
                 return x =>

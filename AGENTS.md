@@ -9,6 +9,7 @@
 
 - `Automatics/Libraries/mod-utils` is a read-only library dependency. Do not edit files under this directory unless the task is explicitly to update the submodule.
 - When preparing a release, create the Git tag that matches the release/package version so versioned README and Thunderstore links resolve correctly.
+- Keep `docs/` for end-user-facing documentation. Do not place implementation plans, internal audits, research notes, or other non-end-user documents under `docs/`.
 
 ## Required local dependencies
 - .NET SDK 8.0 or newer

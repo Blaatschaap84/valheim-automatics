@@ -1307,7 +1307,62 @@ Specify a shortcut key to attempt mining. If a valid shortcut key is assigned to
 
 - Default value:
 
-## [ #9 Automatic Pickup ] / [automatic_pickup]
+## [ #9 Automatic Storage ] / [automatic_storage]
+### Disable Module (Reboot Required) / [module]
+You can disable this feature completely to avoid adding logic you don't need. (Game must be restart for reflect this option)
+
+- Default value: Enabled
+- Acceptable values: Enabled, Disabled
+
+### Automatic Storage / [enable_automatic_storage]
+Specify whether to enable the feature that stores player inventory items into nearby containers when the storage shortcut is pressed.
+
+- Default value: true
+
+### Storage Search Range / [storage_search_range]
+Specify the maximum distance to search for containers. (Unit: meters)
+
+- Default value: 8
+- Acceptable value range: From 1 to 64
+
+### Container Reference Limit / [container_reference_limit]
+Specify the maximum number of nearby containers to reference in distance order. Set to 0 for unlimited.
+
+- Default value: 0
+- Acceptable value range: From 0 to 999
+
+### Allow Container / [allow_container]
+Specify containers that allow automatic storage. Private chests are excluded by default.
+
+- Default value: PieceChestWood, PieceChest, PieceChestBlackmetal, PieceChestCharred
+
+### Allowed Item Types / [allowed_item_types]
+Specify Valheim item types that can be stored automatically.
+
+- Default value: Material, Consumable, OneHandedWeapon, Bow, Shield, Helmet, Chest, Ammo, Customization, Legs, Hands, Trophy, TwoHandedWeapon, Torch, Misc, Shoulder, Utility, Tool, Attach_Atgeir, Fish, TwoHandedWeaponLeft, AmmoNonEquipable, Trinket
+
+### Excluded Items / [excluded_items]
+Specify items that automatic storage must keep in the player inventory. Plain entries are case-insensitive partial matches against internal names, prefab names, and localized display names. Prefix an entry with r/ to use a regular expression.
+
+- Default value:
+
+### Store Hotbar Items / [store_hotbar_items]
+Specify whether items in the hotbar row can be stored automatically.
+
+- Default value: false
+
+### Store Items / [store_items_key]
+Specify the shortcut key that stores eligible inventory items into nearby containers once. If no key is assigned, automatic storage does not run.
+
+- Default value:
+
+### Storage Message / [storage_message]
+Specify where the message is displayed after items are stored.
+
+- Default value: None
+- Acceptable values: None, Center, TopLeft
+
+## [ #10 Automatic Pickup ] / [automatic_pickup]
 ### Disable Module (Reboot Required) / [module]
 You can disable this feature completely to avoid adding logic you don't need. (Game must be restart for reflect this option)
 

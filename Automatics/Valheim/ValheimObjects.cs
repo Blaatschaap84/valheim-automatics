@@ -419,6 +419,7 @@ namespace Automatics.Valheim
         private static readonly List<ObjectDataJson> JsonCache;
 
         public static readonly ValheimObject Animal;
+        public static readonly ValheimObject Container;
         public static readonly ValheimObject Dungeon;
         public static readonly ValheimObject Flora;
         public static readonly ValheimObject Mineral;
@@ -440,6 +441,7 @@ namespace Automatics.Valheim
             JsonCache = new List<ObjectDataJson>();
 
             Animal = new ValheimObject("animal");
+            Container = new ValheimObject("container");
             Dungeon = new ValheimObject("dungeon");
             Flora = new ValheimObject("flora");
             Mineral = new ValheimObject("mineral");
@@ -506,6 +508,7 @@ namespace Automatics.Valheim
                 Initialize(directory);
 
             Animal.Register(JsonCache);
+            Container.Register(JsonCache);
             Dungeon.Register(JsonCache);
             Flora.Register(JsonCache);
             Mineral.Register(JsonCache);

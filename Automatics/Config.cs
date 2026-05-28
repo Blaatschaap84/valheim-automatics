@@ -79,6 +79,7 @@ namespace Automatics
 
             Instance.ChangeSection("general");
             Instance.BindCustomValheimObject("custom_animal", ValheimObject.Animal);
+            Instance.BindCustomValheimObject("custom_container", ValheimObject.Container);
             Instance.BindCustomValheimObject("custom_dungeon", ValheimObject.Dungeon);
             Instance.BindCustomValheimObject("custom_flora", ValheimObject.Flora);
             Instance.BindCustomValheimObject("custom_mineral", ValheimObject.Mineral);

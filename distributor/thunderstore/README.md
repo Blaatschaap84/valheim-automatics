@@ -39,6 +39,10 @@ Automatically repairs items when the player is near usable crafting stations or,
 
 Automatically mines allowed minerals around the player. Mining can run at the configured interval or only when the mining shortcut is pressed, and it can require a pickaxe or wishbone for underground minerals.
 
+### Automatic storage
+
+Stores eligible player inventory items into nearby allowed containers when the storage shortcut is pressed. It fills existing item stacks first, then prefers containers that already hold the same Valheim item type, and finally uses other containers with space. Hotbar, equipped, quest, and configured excluded items are kept in the player inventory by default.
+
 ### Automatic pickup
 
 Automatically picks up nearby items at the configured interval when no Pickup All Nearby shortcut is assigned. If the shortcut is assigned, interacting with a pickable object while pressing it picks up matching nearby objects instead of running interval pickup.

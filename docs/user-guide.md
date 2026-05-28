@@ -13,6 +13,7 @@ defaults, and accepted value ranges, see [CONFIG.md](../CONFIG.md).
 - [Automatic feeding](#automatic-feeding)
 - [Automatic repair](#automatic-repair)
 - [Automatic mining](#automatic-mining)
+- [Automatic storage](#automatic-storage)
 - [Automatic pickup](#automatic-pickup)
 - [Console commands](#console-commands)
 
@@ -323,6 +324,40 @@ Key settings:
 
 Automatics checks the pickaxe tool tier against the mineral, uses pickaxe
 durability, raises the Pickaxes skill, and applies the pickaxe hit effects.
+
+## Automatic storage
+
+Automatic storage moves eligible items from the local player's inventory into
+nearby allowed containers when `Store Items` is pressed. If `Store Items` is
+empty, storage does not run.
+
+Storage order:
+
+1. Fill existing stacks of the same item.
+2. Prefer containers that already contain the same Valheim item type.
+3. Use empty containers, then other containers with space.
+
+Key settings:
+
+| Setting | Effect |
+| --- | --- |
+| `Automatic Storage` | Turns hotkey storage on or off. |
+| `Store Items` | Shortcut that runs one storage pass. Empty means storage is disabled. |
+| `Storage Search Range` | Controls how far Automatics searches for containers. |
+| `Container Reference Limit` | Limits how many nearby containers are checked. `0` means unlimited. |
+| `Allow Container` | Selects which container definitions Automatics may use. Private chests are excluded by default. |
+| `Allowed Item Types` | Selects which Valheim item types can be stored. |
+| `Excluded Items` | Keeps matching items in the player inventory. |
+| `Store Hotbar Items` | Allows hotbar-row items to be stored when enabled. |
+| `Storage Message` | Controls whether a nonzero storage result is shown. |
+
+Equipped items, quest items, and hotbar-row items are skipped by default.
+`Excluded Items` matches internal item names, prefab names, and localized display
+names. Plain entries use case-insensitive partial matching. Prefix an entry with
+`r/` to use a regular expression.
+
+Automatic storage checks the same container access rules used by Valheim for
+private chests, guard stones, and containers already in use.
 
 ## Automatic pickup
 

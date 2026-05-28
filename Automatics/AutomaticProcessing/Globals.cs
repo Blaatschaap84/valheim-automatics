@@ -10,7 +10,7 @@ namespace Automatics.AutomaticProcessing
 
     internal static class Globals
     {
-        public static ValheimObject Container { get; } = new ValheimObject("container");
+        public static ValheimObject Container => ValheimObject.Container;
     }
 
     internal static class Logics
@@ -71,8 +71,7 @@ namespace Automatics.AutomaticProcessing
 
         public static bool IsAllowContainer(Container container)
         {
-            return Globals.Container.GetIdentify(Objects.GetName(container), out var identifier) &&
-                   Config.AllowContainer.Contains(identifier);
+            return ContainerAccess.IsAllowed(container, Config.AllowContainer);
         }
 
         public static bool IsAllowProcessing(string target, Process type)
@@ -89,11 +88,7 @@ namespace Automatics.AutomaticProcessing
         // the caller must skip the mutation.
         public static bool TryClaimContainer(Container container)
         {
-            if (container == null) return false;
-            if (!Objects.GetZNetView(container, out var nview)) return false;
-            if (nview == null || !nview.IsValid() || nview.GetZDO() == null) return false;
-            if (!nview.IsOwner()) nview.ClaimOwnership();
-            return true;
+            return ContainerAccess.TryClaimContainer(container);
         }
 
         public static bool TryRemoveItem(Inventory inventory, string itemName, int minCount,
