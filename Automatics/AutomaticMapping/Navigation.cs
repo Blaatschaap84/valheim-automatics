@@ -15,6 +15,7 @@ namespace Automatics.AutomaticMapping
         private const float TextLeft = 8f;
         private const float TextRight = 8f;
         private const float TextHeight = 18f;
+        private const float ManualPinMapPlaneHeightEpsilon = 0.01f;
 
         private static Minimap.PinData _targetPin;
         private static GameObject _overlayObject;
@@ -78,7 +79,7 @@ namespace Automatics.AutomaticMapping
             if (!EnsureOverlay())
                 return;
 
-            var targetPos = _targetPin.m_pos;
+            var targetPos = GetNavigationTargetPosition(_targetPin);
             if (!TryGetScreenPoint(targetPos, out var screenPoint))
             {
                 SetVisible(false);
@@ -363,6 +364,46 @@ namespace Automatics.AutomaticMapping
             return Localization.instance != null
                 ? Localization.instance.Localize(pinName)
                 : pinName;
+        }
+
+        private static Vector3 GetNavigationTargetPosition(Minimap.PinData pinData)
+        {
+            if (pinData == null) return Vector3.zero;
+
+            var pos = pinData.m_pos;
+            if (!ShouldResolveTerrainHeight(pinData)) return pos;
+            return TryResolveTerrainHeight(pos, out var height)
+                ? new Vector3(pos.x, height, pos.z)
+                : pos;
+        }
+
+        private static bool ShouldResolveTerrainHeight(Minimap.PinData pinData)
+        {
+            return pinData.m_save &&
+                   Mathf.Abs(pinData.m_pos.y) <= ManualPinMapPlaneHeightEpsilon;
+        }
+
+        private static bool TryResolveTerrainHeight(Vector3 pos, out float height)
+        {
+            try
+            {
+                if (Heightmap.GetHeight(pos, out height))
+                    return true;
+
+                if (WorldGenerator.instance != null)
+                {
+                    height = WorldGenerator.instance.GetHeight(pos.x, pos.z);
+                    return true;
+                }
+            }
+            catch (Exception)
+            {
+                // Fall through to the original pin position if Valheim cannot
+                // resolve terrain height in the current world state.
+            }
+
+            height = pos.y;
+            return false;
         }
     }
 }
