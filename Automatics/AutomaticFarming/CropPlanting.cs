@@ -68,11 +68,12 @@ namespace Automatics.AutomaticFarming
 
         /// <summary>
         /// Plants <paramref name="sapling"/> at <paramref name="pos"/>/<paramref name="rot"/>
-        /// when the spot is plantable and the required seeds stay at or above
-        /// <paramref name="reserve"/> after consumption.
+        /// drawing seeds from <paramref name="seedPool"/> when the spot is plantable
+        /// and the required seeds stay at or above <paramref name="reserve"/> after
+        /// consumption.
         /// </summary>
-        public static bool TryPlant(Player player, Piece sapling, Vector3 pos, Quaternion rot,
-            int reserve, out string reason)
+        public static bool TryPlant(Player player, Piece sapling, SeedPool seedPool, Vector3 pos,
+            Quaternion rot, int reserve, out string reason)
         {
             var plant = sapling.GetComponent<Plant>();
             if (plant == null)
@@ -81,13 +82,15 @@ namespace Automatics.AutomaticFarming
                 return false;
             }
 
-            return TryPlant(player, sapling, plant, pos, rot, reserve, out reason);
+            return TryPlant(player, sapling, plant, seedPool, pos, rot, reserve, out reason);
         }
 
         // Overload taking a pre-resolved Plant so the proactive-sow grid does not
-        // repeat GetComponent<Plant> on every candidate tile.
-        public static bool TryPlant(Player player, Piece sapling, Plant plant, Vector3 pos,
-            Quaternion rot, int reserve, out string reason)
+        // repeat GetComponent<Plant> on every candidate tile, and a pre-resolved
+        // SeedPool so a sow pass enumerates nearby containers once instead of per
+        // tile (the container set cannot change within a single synchronous pass).
+        public static bool TryPlant(Player player, Piece sapling, Plant plant, SeedPool seedPool,
+            Vector3 pos, Quaternion rot, int reserve, out string reason)
         {
             if (!PrivateArea.CheckAccess(pos, 0f, false))
             {
@@ -111,7 +114,10 @@ namespace Automatics.AutomaticFarming
                 return false;
             }
 
-            if (!HasSeedAboveReserve(player, sapling, reserve, out var seedInfo))
+            // The reserve gate and the consume step below share the one resolved
+            // pool, so they see the same container set (in Inventory mode no
+            // container is touched at all).
+            if (!HasSeedAboveReserve(seedPool, sapling, reserve, out var seedInfo))
             {
                 reason = $"seed reserve ({seedInfo})";
                 return false;
@@ -131,7 +137,7 @@ namespace Automatics.AutomaticFarming
             // when the world does not grant free building for this piece.
             if (ZoneSystem.instance == null ||
                 !ZoneSystem.instance.GetGlobalKey(sapling.FreeBuildKey()))
-                player.ConsumeResources(sapling.m_resources, 0);
+                ConsumeSeeds(player, seedPool, sapling);
 
             reason = "";
             return true;
@@ -204,9 +210,9 @@ namespace Automatics.AutomaticFarming
         }
 
         /// <summary>True when the required seeds for <paramref name="sapling"/> stay at or above <paramref name="reserve"/> after one planting.</summary>
-        public static bool CanAffordPlanting(Player player, Piece sapling, int reserve)
+        public static bool CanAffordPlanting(SeedPool seedPool, Piece sapling, int reserve)
         {
-            return HasSeedAboveReserve(player, sapling, reserve, out _);
+            return HasSeedAboveReserve(seedPool, sapling, reserve, out _);
         }
 
         /// <summary>True when <paramref name="pos"/> sits on cultivated ground.</summary>
@@ -276,10 +282,9 @@ namespace Automatics.AutomaticFarming
             return true;
         }
 
-        private static bool HasSeedAboveReserve(Player player, Piece sapling, int reserve,
+        private static bool HasSeedAboveReserve(SeedPool pool, Piece sapling, int reserve,
             out string seedInfo)
         {
-            var inventory = player.GetInventory();
             foreach (var requirement in sapling.m_resources)
             {
                 if (!requirement.m_resItem) continue;
@@ -288,7 +293,7 @@ namespace Automatics.AutomaticFarming
                 if (amount <= 0) continue;
 
                 var name = requirement.m_resItem.m_itemData.m_shared.m_name;
-                var have = inventory.CountItems(name);
+                var have = pool.Count(name);
                 if (have - amount < reserve)
                 {
                     seedInfo = $"{name}: have {have}, need {amount} keeping {reserve}";
@@ -298,6 +303,37 @@ namespace Automatics.AutomaticFarming
 
             seedInfo = "";
             return true;
+        }
+
+        // Consumes the sapling's seed requirements from the resolved pool. Inventory
+        // mode keeps the exact vanilla consume path so default behavior is unchanged;
+        // Containers mode removes by name from the field-local Seed-role container
+        // pool (the player inventory is never charged).
+        private static void ConsumeSeeds(Player player, SeedPool pool, Piece sapling)
+        {
+            if (pool.Source == SeedSource.Inventory)
+            {
+                player.ConsumeResources(sapling.m_resources, 0);
+                return;
+            }
+
+            foreach (var requirement in sapling.m_resources)
+            {
+                if (!requirement.m_resItem) continue;
+
+                var amount = requirement.GetAmount(0);
+                if (amount <= 0) continue;
+
+                var name = requirement.m_resItem.m_itemData.m_shared.m_name;
+                var removed = pool.Consume(name, amount);
+
+                // The reserve gate already proved the pool holds enough, so a
+                // shortfall would mean the container set changed mid-pass; surface
+                // it at Debug level rather than over-draw.
+                if (removed < amount)
+                    Automatics.Logger.Debug(() =>
+                        $"Farming seed consume shortfall for {name}: removed {removed} of {amount}");
+            }
         }
 
         private static void EnsureSaplingMap()

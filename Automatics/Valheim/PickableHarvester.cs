@@ -1,4 +1,5 @@
-﻿using ModUtils;
+﻿using System.Collections.Generic;
+using ModUtils;
 using UnityEngine;
 
 namespace Automatics.Valheim
@@ -72,6 +73,189 @@ namespace Automatics.Valheim
 
             zNetView.InvokeRPC(ZNetView.Everybody, "RPC_SetPicked", true);
             return HarvestOutcome.PickedByOwner;
+        }
+
+        /// <summary>
+        /// Harvests <paramref name="pickable"/> into <paramref name="cropContainers"/>
+        /// (nearest-first, owner-only) instead of the player inventory, for
+        /// container-based farming. The crop is picked only when the full yield
+        /// (base amount + skill bonus + extra drops) fits; otherwise nothing is
+        /// deposited, the crop is left standing, and <see cref="HarvestOutcome.NotPicked"/>
+        /// is returned so a later pass can retry it. The player-award
+        /// <see cref="Harvest"/> above is intentionally left untouched so Automatic
+        /// Pickup's behaviour is byte-stable.
+        /// </summary>
+        public static HarvestOutcome HarvestToContainers(Player player, Pickable pickable,
+            ZNetView zNetView, IReadOnlyList<Container> cropContainers)
+        {
+            if (pickable.GetPicked() || pickable.GetEnabled == 0) return HarvestOutcome.NotPicked;
+
+            // Depositing the yield and finalizing the pick must be done owner-side;
+            // a crop this peer does not own is left to its owner rather than
+            // delegated, since the vanilla pickup RPC would award the owner's
+            // inventory, not a container.
+            if (!zNetView.IsOwner()) return HarvestOutcome.NotPicked;
+
+            // No destination: leave the crop standing before rolling the bonus, so a
+            // field with no crop container in range never grants skill for a harvest
+            // that cannot happen.
+            if (cropContainers == null || cropContainers.Count == 0)
+                return HarvestOutcome.NotPicked;
+
+            var amount = GetPickableAmount(pickable);
+            if (amount <= 0) return HarvestOutcome.NotPicked;
+
+            // Roll the bonus YIELD now so the all-or-nothing deposit sizes the full
+            // (base + bonus) stack, but defer the pick-skill RAISE until the deposit
+            // commits below. RollPickableBonus (used by the player-inventory Harvest
+            // path, shared with Automatic Pickup) raises skill as a side effect; that
+            // path is safe because once its CanAddItem gate passes the pick always
+            // finalizes. This container path can still fail — full boxes leave the crop
+            // standing — so raising skill before the deposit would let interval farming
+            // grind pick skill off an unharvested crop by keeping the boxes full.
+            var bonus = 0;
+            if (pickable.m_pickRaiseSkill != Skills.SkillType.None)
+            {
+                var skillFactor = player.GetSkillFactor(pickable.m_pickRaiseSkill);
+                bonus = Random.value < skillFactor * pickable.m_maxLevelBonusChance
+                    ? pickable.m_bonusYieldAmount
+                    : 0;
+            }
+
+            var yields = new List<KeyValuePair<GameObject, int>>();
+            if (pickable.m_itemPrefab)
+                yields.Add(new KeyValuePair<GameObject, int>(pickable.m_itemPrefab, amount + bonus));
+
+            if (!pickable.m_extraDrops.IsEmpty())
+                foreach (var item in pickable.m_extraDrops.GetDropListItems())
+                    if (item.m_dropPrefab && item.m_stack > 0)
+                        yields.Add(new KeyValuePair<GameObject, int>(item.m_dropPrefab, item.m_stack));
+
+            // Nothing to deposit (no item prefab and no drops): leave the crop alone
+            // rather than picking it for no yield.
+            if (yields.Count == 0) return HarvestOutcome.NotPicked;
+
+            if (!TryDepositYield(player, cropContainers, yields)) return HarvestOutcome.NotPicked;
+
+            // Harvest finalized: grant the pick skill that the bonus roll above
+            // withheld until the deposit committed, so a full-container failure never
+            // awards skill for a crop left standing.
+            if (pickable.m_pickRaiseSkill != Skills.SkillType.None)
+                player.RaiseSkill(pickable.m_pickRaiseSkill);
+
+            CreatePickableEffects(pickable, bonus);
+
+            if (pickable.m_aggravateRange > 0f)
+                BaseAI.AggravateAllInArea(pickable.transform.position, pickable.m_aggravateRange,
+                    BaseAI.AggravatedReason.Theif);
+
+            zNetView.InvokeRPC(ZNetView.Everybody, "RPC_SetPicked", true);
+            return HarvestOutcome.PickedByOwner;
+        }
+
+        // All-or-nothing owner-only deposit. Adds every yield across the containers
+        // (nearest-first), and if any item cannot be fully placed, removes
+        // everything it added so the crop can be left standing and retried. Mirrors
+        // Automatic Storage's count-delta add and rollback, so a deposit never
+        // leaves a partial yield in a container while the crop stays unharvested.
+        private static bool TryDepositYield(Player player, IReadOnlyList<Container> containers,
+            IReadOnlyList<KeyValuePair<GameObject, int>> yields)
+        {
+            var deposited = new List<KeyValuePair<Container, KeyValuePair<GameObject, int>>>();
+            var complete = true;
+
+            foreach (var yield in yields)
+            {
+                var remaining = yield.Value;
+                foreach (var container in containers)
+                {
+                    if (remaining <= 0) break;
+
+                    var added = DepositIntoContainer(player, container, yield.Key, remaining);
+                    if (added <= 0) continue;
+
+                    deposited.Add(new KeyValuePair<Container, KeyValuePair<GameObject, int>>(
+                        container, new KeyValuePair<GameObject, int>(yield.Key, added)));
+                    remaining -= added;
+                }
+
+                if (remaining > 0)
+                {
+                    complete = false;
+                    break;
+                }
+            }
+
+            if (complete) return true;
+
+            // The synchronous owner-only gates that let each deposit through still
+            // hold for this same-frame rollback, so a shortfall is not expected; if
+            // the all-or-nothing invariant is ever violated (leftover yield could be
+            // re-harvested next pass), surface it at Debug level rather than silently.
+            var depositedTotal = 0;
+            var rolledBack = 0;
+            foreach (var entry in deposited)
+            {
+                depositedTotal += entry.Value.Value;
+                rolledBack += WithdrawFromContainer(player, entry.Key, entry.Value.Key,
+                    entry.Value.Value);
+            }
+
+            if (rolledBack < depositedTotal)
+                Automatics.Logger.Debug(() =>
+                    $"Farming deposit rollback incomplete: restored {rolledBack} of {depositedTotal}");
+            return false;
+        }
+
+        private static int DepositIntoContainer(Player player, Container container, GameObject prefab,
+            int amount)
+        {
+            if (!ContainerAccess.CanDirectlyMutateContainer(player, container)) return 0;
+            if (!ContainerAccess.TryPrepareOwnedContainerMutation(container)) return 0;
+
+            var inventory = container.GetInventory();
+            return inventory == null ? 0 : AddItem(inventory, prefab, amount);
+        }
+
+        // Returns the number actually restored so the caller can verify the
+        // all-or-nothing rollback completed; the owner-only gates re-checked here
+        // match the deposit's, so under the synchronous single-frame model the
+        // return always equals the requested amount.
+        private static int WithdrawFromContainer(Player player, Container container,
+            GameObject prefab, int amount)
+        {
+            if (amount <= 0) return 0;
+            if (!ContainerAccess.CanDirectlyMutateContainer(player, container)) return 0;
+            if (!ContainerAccess.TryPrepareOwnedContainerMutation(container)) return 0;
+
+            var inventory = container.GetInventory();
+            if (inventory == null) return 0;
+
+            // Roll back by the exact item identity that was deposited (name + quality
+            // + world level), not by name alone, so a failed all-or-nothing deposit
+            // removes only the items it just added and never strips pre-existing
+            // stock of the same crop stored at a different world level. The deposit
+            // (AddItem/CountExactItems) counts that exact identity, so removing it
+            // keeps the rollback symmetric with the add.
+            var sample = CreatePickupItemData(prefab, 1);
+            if (sample == null) return 0;
+
+            var remaining = amount;
+            foreach (var item in new List<ItemDrop.ItemData>(inventory.GetAllItems()))
+            {
+                if (remaining <= 0) break;
+                if (item.m_shared.m_name != sample.m_shared.m_name) continue;
+                if (item.m_quality != sample.m_quality) continue;
+                if (item.m_worldLevel != sample.m_worldLevel) continue;
+
+                var remove = Mathf.Min(remaining, item.m_stack);
+                if (remove <= 0) continue;
+                if (!inventory.RemoveItem(item, remove)) continue;
+
+                remaining -= remove;
+            }
+
+            return amount - remaining;
         }
 
         public static bool CanAddItem(Player player, ItemDrop.ItemData itemData, int stack = -1)

@@ -1,0 +1,166 @@
+using System.Collections.Generic;
+using System.Linq;
+using Automatics.Valheim;
+using UnityEngine;
+
+namespace Automatics.AutomaticFarming
+{
+    /// <summary>
+    /// A designated container resolved for a farming pass, paired with its position
+    /// so range filtering does not re-read the transform.
+    /// </summary>
+    internal readonly struct DesignatedContainer
+    {
+        public DesignatedContainer(Container container, Vector3 position)
+        {
+            Container = container;
+            Position = position;
+        }
+
+        public Container Container { get; }
+        public Vector3 Position { get; }
+    }
+
+    /// <summary>
+    /// The designated containers in the loaded world, resolved once per farming pass
+    /// so container-anchored harvesting and field-local planting-input sourcing share
+    /// one scan.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="Anchors"/> holds every designated container regardless of role or
+    /// owner: a role is read from a replicated ZDO, and harvesting is a read-only
+    /// spatial search whose own owner gate lives on the crop, so a peer's chest may
+    /// still mark a field as managed.
+    /// </para>
+    /// <para>
+    /// <see cref="OwnedCultivation"/>, <see cref="OwnedSeedHarvest"/>, and
+    /// <see cref="OwnedStorage"/> are the subsets farming may actually mutate:
+    /// containers of that role this peer can mutate right now. Counting an input the
+    /// peer could never consume — or a slot it could never fill — would let a gate
+    /// pass and the mutation fall short, so the sourcing and deposit pools are
+    /// restricted to owned containers up front.
+    /// </para>
+    /// </remarks>
+    internal sealed class FarmingContainers
+    {
+        private FarmingContainers(List<DesignatedContainer> ownedCultivation,
+            List<DesignatedContainer> ownedSeedHarvest, List<DesignatedContainer> ownedStorage,
+            List<Vector3> anchors)
+        {
+            OwnedCultivation = ownedCultivation;
+            OwnedSeedHarvest = ownedSeedHarvest;
+            OwnedStorage = ownedStorage;
+            Anchors = anchors;
+        }
+
+        /// <summary>Cultivation-role containers this peer can mutate (grow crops from seeds).</summary>
+        public List<DesignatedContainer> OwnedCultivation { get; }
+
+        /// <summary>Seed-harvest-role containers this peer can mutate (grow seeds from crops).</summary>
+        public List<DesignatedContainer> OwnedSeedHarvest { get; }
+
+        /// <summary>Storage-role containers this peer can mutate (priority harvest deposit).</summary>
+        public List<DesignatedContainer> OwnedStorage { get; }
+
+        /// <summary>Positions of all designated containers, any role or owner (harvest anchor).</summary>
+        public List<Vector3> Anchors { get; }
+
+        public bool HasAnchors => Anchors.Count > 0;
+
+        public static FarmingContainers Resolve(Player player)
+        {
+            var ownedCultivation = new List<DesignatedContainer>();
+            var ownedSeedHarvest = new List<DesignatedContainer>();
+            var ownedStorage = new List<DesignatedContainer>();
+            var anchors = new List<Vector3>();
+
+            foreach (var container in ContainerCache.GetAllInstance())
+            {
+                if (container == null) continue;
+
+                var role = ContainerRoles.GetRole(container);
+                if (role == ContainerRole.None) continue;
+
+                var position = container.transform.position;
+                anchors.Add(position);
+
+                if (!ContainerAccess.CanDirectlyMutateContainer(player, container)) continue;
+
+                var designated = new DesignatedContainer(container, position);
+                switch (role)
+                {
+                    case ContainerRole.Cultivation:
+                        ownedCultivation.Add(designated);
+                        break;
+                    case ContainerRole.SeedHarvest:
+                        ownedSeedHarvest.Add(designated);
+                        break;
+                    case ContainerRole.Storage:
+                        ownedStorage.Add(designated);
+                        break;
+                }
+            }
+
+            return new FarmingContainers(ownedCultivation, ownedSeedHarvest, ownedStorage, anchors);
+        }
+
+        /// <summary>
+        /// Cultivation-role containers this peer can mutate within
+        /// <paramref name="range"/> of <paramref name="position"/>, ordered
+        /// nearest-first.
+        /// </summary>
+        public List<Container> CultivationNear(Vector3 position, float range)
+        {
+            return Near(OwnedCultivation, position, range);
+        }
+
+        /// <summary>
+        /// Seed-harvest-role containers this peer can mutate within
+        /// <paramref name="range"/> of <paramref name="position"/>, ordered
+        /// nearest-first.
+        /// </summary>
+        public List<Container> SeedHarvestNear(Vector3 position, float range)
+        {
+            return Near(OwnedSeedHarvest, position, range);
+        }
+
+        /// <summary>
+        /// Storage-role containers this peer can mutate within
+        /// <paramref name="range"/> of <paramref name="position"/>, ordered
+        /// nearest-first (priority harvest deposit targets).
+        /// </summary>
+        public List<Container> StorageNear(Vector3 position, float range)
+        {
+            return Near(OwnedStorage, position, range);
+        }
+
+        /// <summary>
+        /// The planting boxes that match a yield: seed-harvest boxes when the yield
+        /// is a seed, cultivation boxes otherwise. Used both as the harvest-deposit
+        /// fallback (after storage) and as the replant input pool, so a seed yield is
+        /// only ever stocked from and replanted into seed-harvest boxes, and a crop
+        /// yield only from and into cultivation boxes.
+        /// </summary>
+        public List<Container> MatchingPlantingNear(bool isSeed, Vector3 position, float range)
+        {
+            return isSeed ? SeedHarvestNear(position, range) : CultivationNear(position, range);
+        }
+
+        private static List<Container> Near(List<DesignatedContainer> source, Vector3 position,
+            float range)
+        {
+            var rangeSqr = range * range;
+            return source
+                .Select(x => new
+                {
+                    x.Container,
+                    DistanceSqr = (x.Position - position).sqrMagnitude
+                })
+                .Where(x => x.DistanceSqr <= rangeSqr)
+                .OrderBy(x => x.DistanceSqr)
+                .Select(x => x.Container)
+                .ToList();
+        }
+    }
+}
