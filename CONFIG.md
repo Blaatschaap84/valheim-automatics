@@ -1385,3 +1385,54 @@ Specify the interval within which objects are automatically pickup. Setting it t
 Interacting with pickable objects using this key makes it possible to pick up the same object in a range at once. If a valid shortcut key is assigned to this option, pickup at regular intervals is disabled.
 
 - Default value:
+
+## [ #11 Automatic Farming ] / [automatic_farming]
+### Disable Module (Reboot Required) / [module]
+You can disable this feature completely to avoid adding logic you don't need. (Game must be restart for reflect this option)
+
+- Default value: Enabled
+- Acceptable values: Enabled, Disabled
+
+### Automatic Farming / [enable_automatic_farming]
+Specify whether to enable the feature that harvests grown crops around the player and replants the regrowing sapling at the harvested spot.
+
+- Default value: true
+
+### Farming Interval / [farming_interval]
+Specify the interval between farming attempts. (Unit: seconds)
+
+- Default value: 1.5
+- Acceptable value range: From 0.1 to 4
+
+### Farming Range / [farming_range]
+Specify the maximum distance to search for crops to harvest. (Unit: meters)
+
+- Default value: 8
+- Acceptable value range: From 1 to 64
+
+### Allow Farming Crop / [allow_farming_crop]
+Specify the crops to be automatically harvested and replanted. Crops that have no plantable sapling are harvested only.
+
+- Default value: Dandelion, Mushroom, Raspberries, Blueberries, Carrot, CarrotSeeds, YellowMushroom, Thistle, Turnip, TurnipSeeds, Onion, OnionSeeds, Barley, Cloudberries, Flex, JotunPuffs, Magecap, Fiddlehead, SmokePuff, Vineberry, VineberrySeeds
+
+### Seed Reserve / [seed_reserve]
+Specify the number of each seed item to keep in the inventory. Planting stops consuming a seed once its count would drop below this value.
+
+- Default value: 10
+- Acceptable value range: From 0 to 999
+
+### Proactive Sowing / [enable_proactive_sowing]
+Specify whether to also sow seeds into nearby empty cultivated ground, in addition to replanting harvested spots.
+
+- Default value: true
+
+### Sowing Spacing Factor / [sowing_spacing_factor]
+Specify the multiplier applied to each sapling's grow radius to derive the sowing grid spacing. Higher values space saplings farther apart.
+
+- Default value: 1
+- Acceptable value range: From 0.5 to 4
+
+### Attempt Farming / [farming_key]
+Specify a shortcut key to attempt farming. If a valid shortcut key is assigned to this option, farming at regular intervals is disabled.
+
+- Default value:

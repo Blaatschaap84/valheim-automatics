@@ -49,6 +49,10 @@ Stores eligible player inventory items into nearby allowed containers when the s
 
 Automatically picks up nearby items at the configured interval when no Pickup All Nearby shortcut is assigned. If the shortcut is assigned, interacting with a pickable object while pressing it picks up matching nearby objects instead of running interval pickup.
 
+### Automatic farming
+
+Harvests grown crops around the player and replants the regrowing sapling at each harvested spot, keeping a configurable reserve of every seed. It can also sow seeds into nearby empty cultivated ground on a spacing grid so the saplings settle healthy. Farming can run at the configured interval or only when the farming shortcut is pressed. While farming is active, Automatic pickup leaves allowlisted crops for farming to harvest and replant.
+
 ## Console commands
 
 Automatics adds console commands for command discovery, name lookup, nearby object lookup, and map pin cleanup.

@@ -15,6 +15,7 @@ defaults, and accepted value ranges, see [CONFIG.md](../CONFIG.md).
 - [Automatic mining](#automatic-mining)
 - [Automatic storage](#automatic-storage)
 - [Automatic pickup](#automatic-pickup)
+- [Automatic farming](#automatic-farming)
 - [Console commands](#console-commands)
 
 ## Start here
@@ -382,6 +383,50 @@ Periodic pickup includes pickable world objects, pickable item objects, and item
 drops that allow automatic pickup. Targeted pickup matches the hovered object's
 displayed pickable name or item name. Automatics still checks inventory space,
 carry weight, tar restrictions, and pieces that should not be picked up.
+
+## Automatic farming
+
+Automatic farming harvests grown crops around the local player and replants the
+regrowing sapling at each harvested spot. It can run at the configured interval
+or only when `Attempt Farming` is pressed.
+
+Each pass:
+
+1. Harvests allowlisted crops within `Farming Range`, nearest first, into the
+   player inventory subject to free space and carry weight.
+2. Replants the sapling that regrows each harvested crop at the same spot when
+   the spot is plantable and the required seed stays at or above `Seed Reserve`.
+3. Sows seeds into nearby empty cultivated ground when `Proactive Sowing` is on.
+
+Key settings:
+
+| Setting | Effect |
+| --- | --- |
+| `Automatic Farming` | Turns farming on or off. |
+| `Farming Interval` | Controls how often farming runs when no farming shortcut is assigned. |
+| `Attempt Farming` | Optional shortcut. When assigned, farming runs only when the shortcut is pressed and the interval is disabled. |
+| `Farming Range` | Controls how far Automatics searches for crops and cultivated ground. |
+| `Allow Farming Crop` | Selects which crops are harvested and replanted. Crops without a plantable sapling are harvested only. |
+| `Seed Reserve` | Keeps at least this many of each seed item in the inventory; planting stops at the reserve. |
+| `Proactive Sowing` | Also sows seeds into nearby empty cultivated ground. |
+| `Sowing Spacing Factor` | Multiplies each sapling's grow radius to set the sowing grid spacing. Raise it if sown saplings are too crowded. |
+
+Automatic farming places saplings only where they would grow healthy: cultivated
+ground when required, the correct biome, no roof overhead, no overheating or
+freezing, and enough grow space from other healthy plants. Sowing targets only
+ground that is already cultivated; Automatics never modifies terrain. Replanting
+and sowing are skipped where the player lacks guard-stone build access.
+
+Proactive sowing scans a grid around the player. When `Farming Range` is large
+relative to a crop's spacing, sowing covers a bounded radius nearest the player
+rather than the full range, to keep each pass cheap; harvesting and replanting
+still use the full `Farming Range`.
+
+While Automatic farming is active, Automatic pickup stops periodically collecting
+the crops in `Allow Farming Crop` so farming can harvest and replant them.
+Disabling the Automatic Farming module or turning off `Automatic Farming`
+restores normal periodic pickup of those crops. The targeted `Pickup All Nearby`
+shortcut still picks up those crops regardless of this.
 
 ## Console commands
 
