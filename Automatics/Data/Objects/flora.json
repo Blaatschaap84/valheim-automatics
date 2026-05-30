@@ -54,7 +54,8 @@
         {
           "value": "$item_carrotseeds"
         }
-      ]
+      ],
+      "tags": ["seed"]
     },
     {
       "identifier": "YellowMushroom",
@@ -90,7 +91,8 @@
         {
           "value": "$item_turnipseeds"
         }
-      ]
+      ],
+      "tags": ["seed"]
     },
     {
       "identifier": "Onion",
@@ -108,7 +110,8 @@
         {
           "value": "$item_onionseeds"
         }
-      ]
+      ],
+      "tags": ["seed"]
     },
     {
       "identifier": "Barley",
@@ -189,7 +192,8 @@
         {
           "value": "$item_vineberryseeds"
         }
-      ]
+      ],
+      "tags": ["seed"]
     }
   ]
 }

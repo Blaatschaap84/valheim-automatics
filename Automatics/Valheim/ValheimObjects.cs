@@ -118,6 +118,11 @@ namespace Automatics.Valheim
         public string label { get; set; }
         public List<ObjectMatcher> matches { get; set; }
 
+        // Generic, optional classification tags (e.g. "seed" on a Flora entry).
+        // Not validated: an element with no tags is valid, so the field never
+        // affects matching, the object lists, or the custom-object round-trip.
+        public List<string> tags { get; set; }
+
         public bool IsValid()
         {
             return TryValidate("", out _);
@@ -535,7 +540,10 @@ namespace Automatics.Valheim
             {
                 identifier = element.identifier,
                 label = element.label,
-                matches = new List<ObjectMatcher>(element.matches)
+                matches = new List<ObjectMatcher>(element.matches),
+                // Built-ins register through CloneElement, so the tags must be
+                // copied here or every built-in element would lose them.
+                tags = element.tags == null ? null : new List<string>(element.tags)
             };
         }
 
@@ -641,6 +649,22 @@ namespace Automatics.Valheim
         public bool IsDefined(string nameOrIdentify)
         {
             return GetIdentify(nameOrIdentify, out _) || GetName(nameOrIdentify, out _);
+        }
+
+        /// <summary>
+        /// True when the element identified by <paramref name="identifier"/> carries
+        /// <paramref name="tag"/> in its generic <c>tags</c> list. Lets farming
+        /// classify a Flora identifier (e.g. seed vs crop) from data rather than by
+        /// name inference. Unknown identifiers and untagged elements return false.
+        /// </summary>
+        public bool HasTag(string identifier, string tag)
+        {
+            var key = identifier.ToLower();
+            if (!_elements.TryGetValue(key, out var element) &&
+                !_customElements.TryGetValue(key, out element))
+                return false;
+
+            return element.tags != null && element.tags.Contains(tag);
         }
     }
 }
