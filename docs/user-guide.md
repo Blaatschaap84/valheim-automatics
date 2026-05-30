@@ -392,11 +392,13 @@ or only when `Attempt Farming` is pressed.
 
 Each pass:
 
-1. Harvests allowlisted crops within `Farming Range`, nearest first, into the
-   player inventory subject to free space and carry weight.
+1. Harvests allowlisted crops within `Farming Range`, nearest first.
 2. Replants the sapling that regrows each harvested crop at the same spot when
-   the spot is plantable and the required seed stays at or above `Seed Reserve`.
-3. Sows seeds into nearby empty cultivated ground when `Proactive Sowing` is on.
+   the spot is plantable and the required input stays at or above `Seed Reserve`.
+3. Sows into nearby empty cultivated ground when `Proactive Sowing` is on.
+
+Where harvested yield goes and where planting input comes from depend on
+`Seed Source`, described below.
 
 Key settings:
 
@@ -405,11 +407,73 @@ Key settings:
 | `Automatic Farming` | Turns farming on or off. |
 | `Farming Interval` | Controls how often farming runs when no farming shortcut is assigned. |
 | `Attempt Farming` | Optional shortcut. When assigned, farming runs only when the shortcut is pressed and the interval is disabled. |
-| `Farming Range` | Controls how far Automatics searches for crops and cultivated ground. |
+| `Farming Range` | Controls how far Automatics searches for crops, cultivated ground, and designated containers. |
 | `Allow Farming Crop` | Selects which crops are harvested and replanted. Crops without a plantable sapling are harvested only. |
-| `Seed Reserve` | Keeps at least this many of each seed item in the inventory; planting stops at the reserve. |
-| `Proactive Sowing` | Also sows seeds into nearby empty cultivated ground. |
+| `Seed Reserve` | Keeps at least this many of each planting input in the active source; planting stops at the reserve. |
+| `Seed Source` | Selects the farming model: `Player Inventory` (the original player-centered behavior) or `Nearby Containers` (container-based, using designated boxes). |
+| `Proactive Sowing` | Also sows into nearby empty cultivated ground. |
 | `Sowing Spacing Factor` | Multiplies each sapling's grow radius to set the sowing grid spacing. Raise it if sown saplings are too crowded. |
+| `Designate Container Role` | Optional shortcut that cycles the role of the container you are looking at (`Nearby Containers` mode; see below). |
+
+### Player Inventory mode
+
+By default (`Seed Source` = `Player Inventory`) farming is player-centered, exactly
+as before: crops are searched, harvested, and replanted around you, harvested crops
+land in your inventory, and replanting and sowing consume seeds from your inventory.
+`Seed Reserve` keeps the reserve within your inventory.
+
+### Nearby Containers mode
+
+Set `Seed Source` to `Nearby Containers` to make farming container-based. Instead of
+centering on the player, farming is anchored to containers you designate with the
+`Designate Container Role` shortcut. Look at a chest and press the key to cycle its
+role:
+
+| Role | Purpose |
+| --- | --- |
+| `Cultivation` (栽培箱) | Plants the seeds it holds to grow crops. |
+| `Seed harvest` (採種箱) | Plants the crops it holds to grow seeds. |
+| `Storage` (収納箱) | Never plants; the priority destination for any harvested yield. |
+| `None` | Not used by farming. |
+
+Roles are named by purpose rather than by the item they store, because the two
+farming activities flip the seed/crop relationship: growing crops plants seeds and
+harvests crops, while multiplying seeds plants crops and harvests seeds. A cultivation
+box and a seed-harvest box therefore never plant each other's stock, so ordinary seeds
+are never planted into a field meant only to multiply seeds, and vice versa. Whether a
+crop counts as a seed is read from data (the `seed` tag on the Flora definition:
+`CarrotSeeds`, `OnionSeeds`, `TurnipSeeds`, `VineberrySeeds`), not guessed from its
+name.
+
+In this mode each pass:
+
+- A cultivation box sows the crop saplings whose seed it holds into empty cultivated
+  ground within `Farming Range` of the box; a seed-harvest box sows the seed saplings
+  whose crop it holds. The planting input is drawn only from same-role boxes within
+  range of the spot, and `Seed Reserve` is kept across that local same-role pool.
+- Crops within `Farming Range` of any designated box (cultivation, seed-harvest, or
+  storage) are harvested. The yield is classified by tag and deposited into storage
+  boxes in range first, otherwise into the matching planting box (crops into a
+  cultivation box, seeds into a seed-harvest box), nearest first. If no target has
+  room for the full yield, the crop is left standing and retried on a later pass;
+  nothing is awarded to the player or dropped. The player inventory is never used in
+  this mode.
+- Each harvested spot is replanted with the matching sapling, drawing its input from
+  the matching-role boxes near the spot. With no matching-role box in range, the spot
+  is not replanted.
+
+Designating, sourcing, and depositing only touch containers this client owns and can
+open, so a chest behind a ward you lack access to, or one another player is using, is
+read for its role but never modified. Roles persist with the save and are visible to
+other players. Because the game can only act on loaded objects, the area around the
+designated boxes must be loaded (you nearby, or the field otherwise kept loaded);
+unloaded or remote fields are not farmed. When two same-role boxes' ranges overlap they
+may both sow the shared tiles, which is harmless (they plant the same kind of sapling);
+space the boxes by `Farming Range` if you want separate fields.
+
+Self-seeding crops (`Barley`, `Flex`, `Magecap`, `JotunPuffs`) have no separate seed,
+so only a cultivation box plants them, from the crop itself. `Vineberry` grows on a
+support and is never auto-planted.
 
 Automatic farming places saplings only where they would grow healthy: cultivated
 ground when required, the correct biome, no roof overhead, no overheating or
@@ -417,10 +481,11 @@ freezing, and enough grow space from other healthy plants. Sowing targets only
 ground that is already cultivated; Automatics never modifies terrain. Replanting
 and sowing are skipped where the player lacks guard-stone build access.
 
-Proactive sowing scans a grid around the player. When `Farming Range` is large
-relative to a crop's spacing, sowing covers a bounded radius nearest the player
-rather than the full range, to keep each pass cheap; harvesting and replanting
-still use the full `Farming Range`.
+Proactive sowing scans a grid around the planting origin (the player in
+`Player Inventory` mode, each planting box in `Nearby Containers` mode). When
+`Farming Range` is large relative to a crop's spacing, sowing covers a bounded
+radius nearest the origin rather than the full range, to keep each pass cheap;
+harvesting and replanting still use the full `Farming Range`.
 
 While Automatic farming is active, Automatic pickup stops periodically collecting
 the crops in `Allow Farming Crop` so farming can harvest and replant them.

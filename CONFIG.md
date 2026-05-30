@@ -1416,10 +1416,16 @@ Specify the crops to be automatically harvested and replanted. Crops that have n
 - Default value: Dandelion, Mushroom, Raspberries, Blueberries, Carrot, CarrotSeeds, YellowMushroom, Thistle, Turnip, TurnipSeeds, Onion, OnionSeeds, Barley, Cloudberries, Flex, JotunPuffs, Magecap, Fiddlehead, SmokePuff, Vineberry, VineberrySeeds
 
 ### Seed Reserve / [seed_reserve]
-Specify the number of each seed item to keep in the inventory. Planting stops consuming a seed once its count would drop below this value.
+Specify the number of each seed item to keep in the active seed source. Planting stops consuming a seed once its count would drop below this value.
 
 - Default value: 10
 - Acceptable value range: From 0 to 999
+
+### Seed Source / [seed_source]
+Specify where planting draws seeds from. Player Inventory keeps the original behavior: crops are searched, harvested, and replanted around you and seeds come from your inventory. Nearby Containers makes farming container-based: the search is anchored to the containers you designate (see Designate Container Role), each planting box draws its input only from same-role boxes within Farming Range, and harvested yield is deposited into storage boxes first, otherwise the matching planting box, never the player inventory. The Seed Reserve is kept within whichever pool is in use.
+
+- Default value: Inventory
+- Acceptable values: Inventory, Containers
 
 ### Proactive Sowing / [enable_proactive_sowing]
 Specify whether to also sow seeds into nearby empty cultivated ground, in addition to replanting harvested spots.
@@ -1434,5 +1440,10 @@ Specify the multiplier applied to each sapling's grow radius to derive the sowin
 
 ### Attempt Farming / [farming_key]
 Specify a shortcut key to attempt farming. If a valid shortcut key is assigned to this option, farming at regular intervals is disabled.
+
+- Default value:
+
+### Designate Container Role / [designate_container_key]
+Specify a shortcut key that cycles the role of the container you are looking at between none, cultivation, seed harvest, and storage. When Seed Source is set to Nearby Containers, a cultivation box grows crops from the seeds it holds, a seed-harvest box grows seeds from the crops it holds, and harvested yield is deposited into nearby storage boxes first, otherwise back into the matching planting box. Changing a role claims ownership of the chest, so it only works on containers you can access.
 
 - Default value:

@@ -51,7 +51,7 @@ Automatically picks up nearby items at the configured interval when no Pickup Al
 
 ### Automatic farming
 
-Harvests grown crops around the player and replants the regrowing sapling at each harvested spot, keeping a configurable reserve of every seed. It can also sow seeds into nearby empty cultivated ground on a spacing grid so the saplings settle healthy. Farming can run at the configured interval or only when the farming shortcut is pressed. While farming is active, Automatic pickup leaves allowlisted crops for farming to harvest and replant.
+Harvests grown crops around the player and replants the regrowing sapling at each harvested spot, keeping a configurable reserve of every planting input. It can also sow into nearby empty cultivated ground on a spacing grid so the saplings settle healthy. Planting can draw from the player inventory, or from containers you designate by role — cultivation boxes to grow crops, seed-harvest boxes to multiply seeds, and storage boxes to receive the yield — so whole fields can run from chests without ever planting the wrong stock. Farming can run at the configured interval or only when the farming shortcut is pressed. While farming is active, Automatic pickup leaves allowlisted crops for farming to harvest and replant.
 
 ## Console commands
 
