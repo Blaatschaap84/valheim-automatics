@@ -136,18 +136,13 @@ namespace Automatics.AutomaticMapping
              * + else
              * +   AutomaticMapping.SetSaveFlag(Map.GetClosestPin(pos3, this.m_removeRadius * (this.m_largeZoom * 2f));
              */
-            // Capture the pos3 local from its ScreenToWorldPoint store instead of
-            // hardcoding Ldloc_S 8, so a future game update that shifts the local layout
-            // reloads the right Vector3 (or fails loudly at patch time, not silently).
-            var matcher = new CodeMatcher(instructions, generator)
-                .MatchEndForward(
-                    new CodeMatch(OpCodes.Call,
-                        AccessTools.Method(typeof(Minimap), "ScreenToWorldPoint")),
-                    new CodeMatch(OpCodes.Stloc_S))
-                .ThrowIfInvalid("Could not find Minimap.UpdateMap pos3 assignment.");
-            var pos3Local = matcher.Operand;
-
-            return matcher
+            // pos3 is local 8 (verified against the vanilla Minimap.UpdateMap IL). It is
+            // hardcoded rather than captured dynamically because UpdateMap has several
+            // ScreenToWorldPoint stores (the JoyTab branches), so a naive "first
+            // ScreenToWorldPoint + Stloc_S" capture grabs the RemoveMap branch's local 7,
+            // not the GetClosestPin branch's pos3. The ThrowIfInvalid guards below still
+            // make a layout change fail loudly at patch time instead of silently.
+            return new CodeMatcher(instructions, generator)
                 .MatchEndForward(
                     new CodeMatch(OpCodes.Call,
                         AccessTools.Method(typeof(Minimap), "GetClosestPin")),
@@ -161,7 +156,7 @@ namespace Automatics.AutomaticMapping
                 .Advance(-1)
                 .Insert(
                     new CodeInstruction(OpCodes.Brtrue_S, ifPinNotNull),
-                    new CodeInstruction(OpCodes.Ldloc_S, pos3Local),
+                    new CodeInstruction(OpCodes.Ldloc_S, 8),
                     new CodeInstruction(OpCodes.Ldarg_0),
                     new CodeInstruction(OpCodes.Ldfld,
                         AccessTools.Field(typeof(Minimap), "m_removeRadius")),
