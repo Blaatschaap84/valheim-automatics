@@ -151,7 +151,11 @@ namespace Automatics.AutomaticProcessing
 
             var range = Config.ContainerSearchRange(target);
             var limit = Config.ContainerReferenceLimit(target);
-            var cacheKey = target + ":" + origin.GetHashCode() + ":" + range + ":" + limit;
+            // Key on the exact origin components, not Vector3.GetHashCode(): two processors
+            // with the same name/range/limit at different positions can share a hash and
+            // would otherwise read each other's (wrongly ordered) container list.
+            var cacheKey = target + ":" + origin.x + ":" + origin.y + ":" + origin.z +
+                           ":" + range + ":" + limit;
             if (Containers.TryGetValue(cacheKey, out var cache)) return cache.Where(x => x.container);
 
             var containers = new ContainerList();
@@ -164,7 +168,8 @@ namespace Automatics.AutomaticProcessing
                     orderby distance
                     select (x, distance)).Take(limit > 0 ? limit : int.MaxValue));
 
-            return containers;
+            // Filter destroyed containers on this path too, matching the cache-hit branch.
+            return containers.Where(x => x.container);
         }
     }
 }
