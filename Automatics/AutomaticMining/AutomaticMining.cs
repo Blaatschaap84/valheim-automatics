@@ -51,12 +51,15 @@ namespace Automatics.AutomaticMining
         {
             //TODO: Improve position taking method. Petrified bone and soft tissue position is not being obtained correctly.
             var origin = player.transform.position;
+            // Filter to owned, mineable minerals before measuring distance: AutomaticMining
+            // is attached to every Destructible in the world (barrels, crates, ...), so the
+            // old `let distance` ran Vector3.Distance for all of them each tick. Keep ToList
+            // since Mining() can destroy a node and mutate AllInstance mid-iteration.
             var automaticMinings = (from x in AllInstance
-                    let distance = Vector3.Distance(origin, x.transform.position)
                     where x._zNetView.IsValid() &&
                           x._zNetView.HasOwner() &&
                           IsAllowMiningMinerals(x._component)
-                    orderby distance
+                    orderby Vector3.Distance(origin, x.transform.position)
                     select x).ToList();
 
             foreach (var automaticMining in automaticMinings)
@@ -128,7 +131,10 @@ namespace Automatics.AutomaticMining
                 case MineRock5 rock5:
                     return rock5.gameObject.GetComponentsInChildren<Collider>();
                 case Destructible destructible:
-                    return new[] { destructible.GetComponentInChildren<Collider>() };
+                    var collider = destructible.GetComponentInChildren<Collider>();
+                    return collider != null
+                        ? new[] { collider }
+                        : System.Array.Empty<Collider>();
                 default:
                     return null;
             }
