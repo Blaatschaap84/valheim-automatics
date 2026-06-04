@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using HarmonyLib;
 using ModUtils;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -8,6 +9,12 @@ namespace Automatics.AutomaticProcessing
 {
     internal static class ConnectionEffects
     {
+        // Update() runs every frame via Hooks.OnPlayerUpdate; resolve Player.m_hovering
+        // through a cached field-ref delegate instead of allocating a Traverse and
+        // walking the type for the FieldInfo on every frame.
+        private static readonly AccessTools.FieldRef<Player, GameObject> HoveringRef =
+            AccessTools.FieldRefAccess<Player, GameObject>("m_hovering");
+
         private static readonly int ColorPropertyId = Shader.PropertyToID("_Color");
         private static readonly int TintColorPropertyId = Shader.PropertyToID("_TintColor");
         private static readonly int EmissionColorPropertyId =
@@ -47,7 +54,7 @@ namespace Automatics.AutomaticProcessing
                 return;
             }
 
-            var hovering = Reflections.GetField<GameObject>(player, "m_hovering");
+            var hovering = HoveringRef(player);
             if (!hovering)
             {
                 Cleanup();
