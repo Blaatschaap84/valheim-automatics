@@ -248,6 +248,14 @@ namespace Automatics.AutomaticMapping
 
         public static void RemoveCachedPins(ISet<ZDOID> excludes = null)
         {
+            // A null excludes set means a full turn-off (mapping disabled or
+            // DynamicObjectMappingRange <= 0), not a normal scan. Drain the vehicle pin
+            // cache on that path too so its ZDOID->PinData entries do not leak for the
+            // session; the saved vehicle minimap pins persist and are re-adopted by
+            // TryFindExistingVehiclePin when mapping resumes.
+            if (excludes is null)
+                RemoveVehicleCachedPins();
+
             if (PinDataCache.Count == 0) return;
 
             if (excludes is null)
@@ -280,6 +288,20 @@ namespace Automatics.AutomaticMapping
         {
             RemovePinFromCache(pinData);
             RemoveVehiclePinFromCache(pinData);
+        }
+
+        // Drops every vehicle pin cache entry without touching the saved minimap pins
+        // (vehicle pins are created with save=true). Used when the dynamic scan turns off
+        // so the per-vehicle cache dictionaries do not accumulate for the whole session.
+        private static void RemoveVehicleCachedPins()
+        {
+            if (VehiclePinCache.Count == 0 && VehicleDirtyPins.Count == 0) return;
+
+            VehiclePinCache.Clear();
+            VehiclePinKeyCache.Clear();
+            VehiclePinTargetCache.Clear();
+            VehiclePinVelocityCache.Clear();
+            VehicleDirtyPins.Clear();
         }
 
         public static void FlushVehiclePins()

@@ -136,19 +136,32 @@ namespace Automatics.AutomaticMapping
              * + else
              * +   AutomaticMapping.SetSaveFlag(Map.GetClosestPin(pos3, this.m_removeRadius * (this.m_largeZoom * 2f));
              */
-            return new CodeMatcher(instructions, generator)
+            // Capture the pos3 local from its ScreenToWorldPoint store instead of
+            // hardcoding Ldloc_S 8, so a future game update that shifts the local layout
+            // reloads the right Vector3 (or fails loudly at patch time, not silently).
+            var matcher = new CodeMatcher(instructions, generator)
+                .MatchEndForward(
+                    new CodeMatch(OpCodes.Call,
+                        AccessTools.Method(typeof(Minimap), "ScreenToWorldPoint")),
+                    new CodeMatch(OpCodes.Stloc_S))
+                .ThrowIfInvalid("Could not find Minimap.UpdateMap pos3 assignment.");
+            var pos3Local = matcher.Operand;
+
+            return matcher
                 .MatchEndForward(
                     new CodeMatch(OpCodes.Call,
                         AccessTools.Method(typeof(Minimap), "GetClosestPin")),
                     new CodeMatch(OpCodes.Stloc_S))
+                .ThrowIfInvalid("Could not find Minimap.UpdateMap GetClosestPin assignment.")
                 .MatchStartForward(
                     new CodeMatch(OpCodes.Brfalse))
+                .ThrowIfInvalid("Could not find Minimap.UpdateMap closest-pin null check.")
                 .Advance(1)
                 .CreateLabel(out var ifPinNotNull)
                 .Advance(-1)
                 .Insert(
                     new CodeInstruction(OpCodes.Brtrue_S, ifPinNotNull),
-                    new CodeInstruction(OpCodes.Ldloc_S, 8),
+                    new CodeInstruction(OpCodes.Ldloc_S, pos3Local),
                     new CodeInstruction(OpCodes.Ldarg_0),
                     new CodeInstruction(OpCodes.Ldfld,
                         AccessTools.Field(typeof(Minimap), "m_removeRadius")),
