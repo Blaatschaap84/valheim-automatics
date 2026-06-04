@@ -68,9 +68,7 @@ namespace Automatics.AutomaticDoor
                     var message = Automatics.L10N.Localize(
                         "@message_automatic_door_enable_disable_toggle",
                         Config.EnableAutomaticDoor ? "@enabled" : "@disabled");
-                    var type = messagePosition == Message.Center
-                        ? MessageHud.MessageType.Center
-                        : MessageHud.MessageType.TopLeft;
+                    var type = messagePosition.ToMessageType();
                     player.Message(type, message);
                 }
             }

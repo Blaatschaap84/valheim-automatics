@@ -85,9 +85,7 @@ namespace Automatics.AutomaticStorage
             if (player == null || result == null || result.StoredItems <= 0) return;
             if (Config.StorageMessage == Message.None) return;
 
-            var type = Config.StorageMessage == Message.Center
-                ? MessageHud.MessageType.Center
-                : MessageHud.MessageType.TopLeft;
+            var type = Config.StorageMessage.ToMessageType();
             player.Message(type,
                 Automatics.L10N.Localize("@message_automatic_storage_stored_items",
                     result.StoredItems, result.TouchedContainers));

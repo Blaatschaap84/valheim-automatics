@@ -21,9 +21,7 @@ namespace Automatics.AutomaticRepair
             Automatics.Logger.Debug(() => $"Repaired {repairCount} items");
             if (Config.ItemRepairMessage == Message.None) return;
 
-            var type = Config.ItemRepairMessage == Message.Center
-                ? MessageHud.MessageType.Center
-                : MessageHud.MessageType.TopLeft;
+            var type = Config.ItemRepairMessage.ToMessageType();
             player.Message(type,
                 Automatics.L10N.Localize("@message_automatic_repair_repaired_the_items",
                     repairCount));

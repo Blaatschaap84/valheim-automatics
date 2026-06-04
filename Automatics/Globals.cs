@@ -22,4 +22,17 @@ namespace Automatics
     internal sealed class PickableCache : InstanceCache<Pickable>
     {
     }
+
+    internal static class MessageExtensions
+    {
+        // Single source of truth for the Message-position -> MessageHud.MessageType
+        // mapping that the repair, storage, and door modules each used to inline.
+        // Callers handle Message.None (suppress the message) before calling this.
+        public static MessageHud.MessageType ToMessageType(this Message message)
+        {
+            return message == Message.Center
+                ? MessageHud.MessageType.Center
+                : MessageHud.MessageType.TopLeft;
+        }
+    }
 }
