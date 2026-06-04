@@ -1,5 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Linq;
+﻿using System.Linq;
 using ModUtils;
 using UnityEngine;
 
@@ -8,8 +7,6 @@ namespace Automatics.AutomaticFeeding
     [DisallowMultipleComponent]
     internal class AutomaticFeeding : MonoBehaviour
     {
-        private static readonly IList<AutomaticFeeding> AllInstance;
-
         private Tameable _tamable;
         private Character _character;
         private MonsterAI _monsterAI;
@@ -19,25 +16,16 @@ namespace Automatics.AutomaticFeeding
         private Humanoid _closestFeeder;
         private ItemDrop.ItemData _consumeTargetItem;
 
-        static AutomaticFeeding()
-        {
-            AllInstance = new List<AutomaticFeeding>();
-        }
-
         private void Awake()
         {
             _tamable = GetComponent<Tameable>();
             _character = GetComponent<Character>();
             _monsterAI = GetComponent<MonsterAI>();
             _baseAI = GetComponent<BaseAI>();
-
-            AllInstance.Add(this);
         }
 
         private void OnDestroy()
         {
-            AllInstance.Remove(this);
-
             _baseAI = null;
             _monsterAI = null;
             _tamable = null;
@@ -49,13 +37,18 @@ namespace Automatics.AutomaticFeeding
 
         public static bool CancelAttackOnFeedBox(BaseAI baseAI, StaticTarget target)
         {
-            return AllInstance.Any(x => x._baseAI == baseAI && x.CancelAttackOnFeedBox(target));
+            // AutomaticFeeding lives on the same GameObject as the patched AI, so resolve
+            // it directly instead of scanning every animal in the world. The old
+            // AllInstance.Any scan made each per-frame postfix O(animals), i.e.
+            // O(animals^2) across all animals each frame.
+            var feeding = baseAI.GetComponent<AutomaticFeeding>();
+            return feeding != null && feeding.CancelAttackOnFeedBox(target);
         }
 
         public static bool Feeding(MonsterAI monsterAI, Humanoid humanoid, float delta)
         {
-            return AllInstance.Any(x =>
-                x._monsterAI == monsterAI && x.Feeding(humanoid, delta));
+            var feeding = monsterAI.GetComponent<AutomaticFeeding>();
+            return feeding != null && feeding.Feeding(humanoid, delta);
         }
 
         private bool HasNetworkOwnership()
@@ -88,7 +81,16 @@ namespace Automatics.AutomaticFeeding
             if (_consumeSearchTimer >= _monsterAI.m_consumeSearchInterval)
             {
                 _consumeSearchTimer = 0f;
-                if (!_tamable.IsHungry()) return false;
+                if (!_tamable.IsHungry())
+                {
+                    // Drop any targets found on an earlier pass so a later non-search
+                    // frame cannot consume food while the animal is no longer hungry.
+                    _closestFeedBox = null;
+                    _closestFeeder = null;
+                    _consumeTargetItem = null;
+                    return false;
+                }
+
                 UpdateFeedInfo();
             }
 
