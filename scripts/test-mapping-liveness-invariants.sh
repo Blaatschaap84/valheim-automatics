@@ -4,6 +4,10 @@ set -euo pipefail
 
 failures=0
 mapping_file="Automatics/AutomaticMapping/AutomaticMapping.cs"
+# AutomaticMapping.cs was split into a facade plus the dynamic/static scan classes;
+# the liveness invariants below moved with the code, so they are checked in those files.
+static_mapping_file="Automatics/AutomaticMapping/StaticObjectMapping.cs"
+dynamic_mapping_file="Automatics/AutomaticMapping/DynamicObjectMapping.cs"
 flora_file="Automatics/AutomaticMapping/FloraNetwork.cs"
 map_file="Automatics/AutomaticMapping/Map.cs"
 navigation_file="Automatics/AutomaticMapping/Navigation.cs"
@@ -43,14 +47,14 @@ require_mineral_validation_before_seen() {
       /private static bool MineralMapping/ { in_function = 1 }
       in_function && /TryGetMineralPosition/ { print NR; exit }
       in_function && /^        private static/ && !/MineralMapping/ { exit }
-    ' "$mapping_file"
+    ' "$static_mapping_file"
   )"
   seen_line="$(
     awk '
       /private static bool MineralMapping/ { in_function = 1 }
       in_function && /TryGetCachedPin\(identify/ { print NR; exit }
       in_function && /^        private static/ && !/MineralMapping/ { exit }
-    ' "$mapping_file"
+    ' "$static_mapping_file"
   )"
 
   if [[ -z "$validation_line" || -z "$seen_line" ]]; then
@@ -82,7 +86,7 @@ reject_source_pattern \
 
 require_mineral_validation_before_seen
 require_source_pattern \
-  "$mapping_file" \
+  "$static_mapping_file" \
   "MineRock5Cache\\.TryGetLivePosition" \
   "MineRock5 mapping must use live hit-area liveness instead of full NonDestroyed snapshots"
 require_source_pattern \
@@ -102,23 +106,23 @@ reject_source_pattern \
   "GetComponentsInChildren<Collider>\\(true\\)|NonDestroyed|TryGetOrBuildSnapshotAlive" \
   "MineRock5 mapping must not use includeInactive collider enumeration or full-health NonDestroyed liveness"
 require_source_pattern \
-  "$mapping_file" \
+  "$static_mapping_file" \
   "TryGetMineRockPosition" \
   "MineRock mapping must use a live-hit-area position helper"
 require_source_pattern \
-  "$mapping_file" \
+  "$static_mapping_file" \
   "AddColliderBounds\\(collider, ref sum, ref maxHeight, ref count\\)" \
   "MineRock mapping must aggregate live hit-area bounds directly"
 reject_source_pattern \
-  "$mapping_file" \
+  "$static_mapping_file" \
   "var liveColliders = new List<Collider>\\(\\)|liveColliders\\.ToArray\\(\\)" \
   "MineRock mapping should not allocate a live collider list on every scan"
 require_source_pattern \
-  "$mapping_file" \
+  "$static_mapping_file" \
   "zdo\\.GetFloat\\(\"Health\" \\+ i, rock\\.m_health\\) <= 0f\\) continue" \
   "MineRock mapping must skip dead hit areas and keep live ones"
 reject_source_pattern \
-  "$mapping_file" \
+  "$static_mapping_file" \
   "GetFloat\\(\"Health\" \\+ i, rock\\.m_health\\) <= 0f\\)[[:space:]]*return empty" \
   "MineRock mapping must not treat one dead hit area as an entirely dead rock"
 require_source_pattern \
@@ -154,15 +158,15 @@ require_source_pattern \
   "Minimap_Explore_Postfix" \
   "exploration updates must refresh hidden automatic pin markers"
 require_source_pattern \
-  "$mapping_file" \
+  "$dynamic_mapping_file" \
   "Map\\.ShouldSuppressTransientAutomaticPin\\(pos\\)" \
   "transient dynamic automatic pins must be suppressed before creation outside explored areas"
 require_source_pattern \
-  "$mapping_file" \
+  "$static_mapping_file" \
   "!save && Map\\.ShouldSuppressTransientAutomaticPin\\(pos\\)" \
   "unsaved static automatic pins must be suppressed before creation outside explored areas"
 require_source_pattern \
-  "$mapping_file" \
+  "$static_mapping_file" \
   "includeInactive: Config\\.HideUnexploredAutomaticMappingPins" \
   "static mapping dedup must see hidden automatic pins only when unexplored-pin hiding is enabled"
 require_source_pattern \
