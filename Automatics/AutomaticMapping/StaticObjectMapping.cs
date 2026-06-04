@@ -132,65 +132,35 @@ namespace Automatics.AutomaticMapping
             return true;
         }
 
-        private static bool GetFlora(string name, out (string Identifier, bool IsAllowed) data)
+        // Shared body for the per-domain resolvers below: classify a name through the
+        // domain registry and report whether the resulting identifier is allow-listed.
+        private static bool ResolveStaticObject(ValheimObject registry, StringList allowlist,
+            string name, out (string Identifier, bool IsAllowed) data)
         {
-            if (ValheimObject.Flora.GetIdentify(name, out var identifier))
+            if (registry.GetIdentify(name, out var identifier))
             {
-                data = (identifier, Config.AllowPinningFlora.Contains(identifier));
+                data = (identifier, allowlist.Contains(identifier));
                 return true;
             }
 
             data = ("", false);
             return false;
         }
+
+        private static bool GetFlora(string name, out (string Identifier, bool IsAllowed) data)
+            => ResolveStaticObject(ValheimObject.Flora, Config.AllowPinningFlora, name, out data);
 
         private static bool GetMineral(string name, out (string Identifier, bool IsAllowed) data)
-        {
-            if (ValheimObject.Mineral.GetIdentify(name, out var identifier))
-            {
-                data = (identifier, Config.AllowPinningMineral.Contains(identifier));
-                return true;
-            }
-
-            data = ("", false);
-            return false;
-        }
+            => ResolveStaticObject(ValheimObject.Mineral, Config.AllowPinningMineral, name, out data);
 
         private static bool GetSpawner(string name, out (string Identifier, bool IsAllowed) data)
-        {
-            if (ValheimObject.Spawner.GetIdentify(name, out var identifier))
-            {
-                data = (identifier, Config.AllowPinningSpawner.Contains(identifier));
-                return true;
-            }
-
-            data = ("", false);
-            return false;
-        }
+            => ResolveStaticObject(ValheimObject.Spawner, Config.AllowPinningSpawner, name, out data);
 
         private static bool GetOther(string name, out (string Identifier, bool IsAllowed) data)
-        {
-            if (MappingObject.Other.GetIdentify(name, out var identifier))
-            {
-                data = (identifier, Config.AllowPinningOther.Contains(identifier));
-                return true;
-            }
-
-            data = ("", false);
-            return false;
-        }
+            => ResolveStaticObject(MappingObject.Other, Config.AllowPinningOther, name, out data);
 
         private static bool GetDungeon(string name, out (string Identifier, bool IsAllowed) data)
-        {
-            if (ValheimObject.Dungeon.GetIdentify(name, out var identifier))
-            {
-                data = (identifier, Config.AllowPinningDungeon.Contains(identifier));
-                return true;
-            }
-
-            data = ("", false);
-            return false;
-        }
+            => ResolveStaticObject(ValheimObject.Dungeon, Config.AllowPinningDungeon, name, out data);
 
         private static string StripCloneSuffix(string name)
         {
@@ -201,16 +171,7 @@ namespace Automatics.AutomaticMapping
         }
 
         private static bool GetSpot(string name, out (string Identifier, bool IsAllowed) data)
-        {
-            if (ValheimObject.Spot.GetIdentify(name, out var identifier))
-            {
-                data = (identifier, Config.AllowPinningSpot.Contains(identifier));
-                return true;
-            }
-
-            data = ("", false);
-            return false;
-        }
+            => ResolveStaticObject(ValheimObject.Spot, Config.AllowPinningSpot, name, out data);
 
         [UsedImplicitly]
         public static void OnObjectDestroy(Component component, ZNetView zNetView)
