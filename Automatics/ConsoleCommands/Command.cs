@@ -91,10 +91,9 @@ namespace Automatics.ConsoleCommands
                         inQuotes = !inQuotes;
                         continue;
 
-                    case ' ' when !inQuotes:
+                    case ' ' when !inQuotes && !escaped:
                         args.Add(buffer.ToString());
                         buffer.Clear();
-                        escaped = false;
                         continue;
 
                     default:
