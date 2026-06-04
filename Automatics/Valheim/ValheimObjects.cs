@@ -99,7 +99,10 @@ namespace Automatics.Valheim
             error = "";
             try
             {
-                regex = new Regex(pattern);
+                // Match the exact matcher's case-insensitivity (string.Equals with
+                // OrdinalIgnoreCase) so the two matcher kinds agree on case, consistent
+                // with the regex options used by ConfigMigration.
+                regex = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
                 return true;
             }
             catch (ArgumentException e)
