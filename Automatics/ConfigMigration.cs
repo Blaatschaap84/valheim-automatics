@@ -165,7 +165,11 @@ namespace Automatics
 
                 if (Regex.IsMatch(line, @"^\[[\w\d_]+\]$"))
                 {
-                    currentCategory = line;
+                    // Key the block under the caller-supplied category, not the header line. A prior
+                    // RenameCategory in the same block mutates lines[begin] in place, so reading the
+                    // line here would cache entries under the new name and the lookup below (by the
+                    // original category) would miss, silently dropping every later RenameConfig.
+                    currentCategory = category;
                     if (!ConfigCache.TryGetValue(currentCategory, out configs))
                     {
                         configs = new List<Config>();
@@ -198,7 +202,7 @@ namespace Automatics
 
         private static void UpdateConfig(Config config, List<string> lines)
         {
-            if (config.Offset < 0 && config.Offset >= lines.Count) return;
+            if (config.Offset < 0 || config.Offset >= lines.Count) return;
             if (string.IsNullOrEmpty(config.Key))
                 lines[config.Offset] = "";
             else

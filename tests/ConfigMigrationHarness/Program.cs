@@ -14,6 +14,8 @@ namespace Automatics
             Run("regex migrations preserve captured processing suffixes", RegexMigrationsPreserveCapturedProcessingSuffixes);
             Run("old automatic_repair section keeps disabled repair", OldAutomaticRepairSectionKeepsDisabledRepair);
             Run("misplaced automatic_feeding repair key remains compatible", MisplacedAutomaticFeedingRepairKeyRemainsCompatible);
+            Run("rename-category block still renames its config keys", RenameCategoryBlockStillRenamesConfigKeys);
+            Run("map pinning rename chains through 1.4.0 mineral rename", MapPinningRenameChainsThroughMineralRename);
             Run("door migration appends PieceHexagonalDoor", DoorMigrationAppendsPieceHexagonalDoor);
 
             return _failures == 0 ? 0 : 1;
@@ -93,6 +95,42 @@ namespace Automatics
             AssertContains(migrated, "[automatic_feeding]");
             AssertContains(migrated, "enable_automatic_repair = false");
             AssertDoesNotContain(migrated, "automatic_repair_enabled = false");
+        }
+
+        private static void RenameCategoryBlockStillRenamesConfigKeys()
+        {
+            // A RenameCategory followed by RenameConfig in the same block (e.g. [logging] -> [system])
+            // must rename both the section header AND its config keys; the keys must not be orphaned.
+            var migrated = Migrate(
+                "# Automatics v1.2.0",
+                "[logging]",
+                "logging_enabled = false",
+                "allowed_log_level = Info");
+
+            AssertContains(migrated, "[system]");
+            AssertContains(migrated, "enable_logging = false");
+            AssertContains(migrated, "log_level_to_allow_logging = Info");
+            AssertDoesNotContain(migrated, "[logging]");
+            AssertDoesNotContain(migrated, "logging_enabled");
+            AssertDoesNotContain(migrated, "allowed_log_level");
+        }
+
+        private static void MapPinningRenameChainsThroughMineralRename()
+        {
+            // [automatic_map_pinning] -> [automatic_mapping] renames allow_pinning_vein -> allow_pinning_deposit
+            // in 1.3.0, which 1.4.0 then renames to allow_pinning_mineral. If the 1.3.0 key rename is dropped,
+            // the 1.4.0 rename has nothing to match and the value is lost.
+            var migrated = Migrate(
+                "# Automatics v1.2.0",
+                "[automatic_map_pinning]",
+                "automatic_map_pinning_enabled = false",
+                "allow_pinning_vein = CopperDeposit");
+
+            AssertContains(migrated, "[automatic_mapping]");
+            AssertContains(migrated, "enable_automatic_mapping = false");
+            AssertContains(migrated, "allow_pinning_mineral = CopperDeposit");
+            AssertDoesNotContain(migrated, "[automatic_map_pinning]");
+            AssertDoesNotContain(migrated, "allow_pinning_vein");
         }
 
         private static void DoorMigrationAppendsPieceHexagonalDoor()
