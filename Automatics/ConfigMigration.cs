@@ -233,8 +233,15 @@ namespace Automatics
             if (!lines.Any())
                 return;
 
+            if (!TryParseVersion(lines, out var version))
+            {
+                Automatics.Logger.Warning(
+                    "Could not determine the config version from its header; skipping migration " +
+                    "to avoid re-running migrations on an already-current file.");
+                return;
+            }
+
             var dirty = false;
-            var version = ParseVersion(lines[0]);
 
             var migrateVersion = new Version(1, 3, 0);
             if (version < migrateVersion)
@@ -446,7 +453,9 @@ namespace Automatics
                 if (string.IsNullOrWhiteSpace(line)) continue;
                 if (!Regex.IsMatch(line, @"^\[[\w\d_]+\]$")) continue;
 
-                if (begin > 0)
+                // begin starts at -1 (no block yet); >= 0 means a section has opened.
+                // Using > 0 would skip a first block that starts at line index 0.
+                if (begin >= 0)
                 {
                     if (operations.TryGetValue(category, out list))
                         list.RemoveAll(x => x.Invoke(category, lines, begin, i));
@@ -465,18 +474,31 @@ namespace Automatics
             ConfigCache.Clear();
         }
 
-        private static Version ParseVersion(string line)
+        private static bool TryParseVersion(List<string> lines, out Version version)
         {
-            var match = VersionPattern.Match(line);
-            if (!match.Success)
+            version = default;
+
+            // The version lives in BepInEx's leading comment header
+            // (e.g. "## Settings file was created by plugin Automatics v1.6.0").
+            // Scan only the leading comment block so a config value further down that
+            // happens to end in vX.Y.Z cannot be mistaken for the file version, and
+            // return false (skip migration) rather than defaulting to 0.0.0 and
+            // destructively re-running every migration on an unrecognized file.
+            foreach (var line in lines)
             {
-                Automatics.Logger.Error($"Invalid version string: {line}");
-                return new Version(0, 0, 0);
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                if (!line.StartsWith("#")) break;
+
+                var match = VersionPattern.Match(line);
+                if (!match.Success) continue;
+
+                version = new Version(int.Parse(match.Groups[1].Value),
+                    int.Parse(match.Groups[2].Value),
+                    int.Parse(match.Groups[3].Value));
+                return true;
             }
 
-            return new Version(int.Parse(match.Groups[1].Value),
-                int.Parse(match.Groups[2].Value),
-                int.Parse(match.Groups[3].Value));
+            return false;
         }
 
         private readonly struct Version : IComparable<Version>

@@ -16,6 +16,8 @@ namespace Automatics
             Run("misplaced automatic_feeding repair key remains compatible", MisplacedAutomaticFeedingRepairKeyRemainsCompatible);
             Run("rename-category block still renames its config keys", RenameCategoryBlockStillRenamesConfigKeys);
             Run("map pinning rename chains through 1.4.0 mineral rename", MapPinningRenameChainsThroughMineralRename);
+            Run("bepinex-style version header still migrates", BepInExStyleVersionHeaderStillMigrates);
+            Run("config without a version header is left unchanged", ConfigWithoutVersionHeaderIsLeftUnchanged);
             Run("door migration appends PieceHexagonalDoor", DoorMigrationAppendsPieceHexagonalDoor);
 
             return _failures == 0 ? 0 : 1;
@@ -131,6 +133,32 @@ namespace Automatics
             AssertContains(migrated, "allow_pinning_mineral = CopperDeposit");
             AssertDoesNotContain(migrated, "[automatic_map_pinning]");
             AssertDoesNotContain(migrated, "allow_pinning_vein");
+        }
+
+        private static void BepInExStyleVersionHeaderStillMigrates()
+        {
+            // The real config header is a BepInEx comment, not a bare "# Automatics vX".
+            var migrated = Migrate(
+                "## Settings file was created by plugin Automatics v1.2.0",
+                "## Plugin GUID: net.eidee.valheim.automatics",
+                "[automatic_repair]",
+                "automatic_repair_enabled = false");
+
+            AssertContains(migrated, "enable_automatic_repair = false");
+            AssertDoesNotContain(migrated, "automatic_repair_enabled = false");
+        }
+
+        private static void ConfigWithoutVersionHeaderIsLeftUnchanged()
+        {
+            // No parseable version means the version is unknown; migrating as 0.0.0 would
+            // destructively re-run every pass on a possibly already-current file, so the
+            // migrator must leave such a file untouched.
+            var migrated = Migrate(
+                "[automatic_repair]",
+                "automatic_repair_enabled = false");
+
+            AssertContains(migrated, "automatic_repair_enabled = false");
+            AssertDoesNotContain(migrated, "enable_automatic_repair");
         }
 
         private static void DoorMigrationAppendsPieceHexagonalDoor()
