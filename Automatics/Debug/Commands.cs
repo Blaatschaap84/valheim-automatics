@@ -70,7 +70,9 @@ namespace Automatics.Debug
                             return;
                         }
 
-                        if (itemName.Contains(name))
+                        // Fuzzy match against the user's search term, not the raw $-token:
+                        // itemName is the localized display name and never contains `name`.
+                        if (itemName.IndexOf(target, StringComparison.OrdinalIgnoreCase) >= 0)
                             matches.Add(item);
                     }
 
@@ -225,6 +227,10 @@ namespace Automatics.Debug
             protected override void CommandAction(Terminal.ConsoleEventArgs args)
             {
                 if (!ParseArgs(args)) return;
+
+                if (!Player.m_localPlayer) return;
+                if (ZoneSystem.instance == null ||
+                    ZoneSystem.instance.m_locationInstances == null) return;
 
                 var origin = Player.m_localPlayer.transform.position;
 

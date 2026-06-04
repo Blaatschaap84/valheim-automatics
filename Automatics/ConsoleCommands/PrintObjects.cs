@@ -327,6 +327,7 @@ namespace Automatics.ConsoleCommands
 
                 var hasEntrance = false;
                 var pos = location.m_position;
+                string message = null;
                 foreach (var (x, y, _) in Objects
                              .GetInsideSphere(pos, location.m_location.m_exteriorRadius,
                                  x => x.GetComponent<Teleport>(), ColliderBuffer,
@@ -337,23 +338,23 @@ namespace Automatics.ConsoleCommands
                     var localizedName = Automatics.L10N.Translate(name);
                     var center = x.bounds.center;
                     var distance = Vector3.Distance(origin, center).ToString("F1");
-                    var message = defined
+                    message = defined
                         ? Automatics.L10N.LocalizeTextOnly(
                             "@command_printobjects_message_result_defined",
                             localizedName, name, objectType, center, distance, identifier)
                         : Automatics.L10N.LocalizeTextOnly(
                             "@command_printobjects_message_result",
                             localizedName, name, center, distance, identifier, prefabName);
-                    PrintLine(args, message);
-
                     hasEntrance = true;
-                    count++;
                     break;
                 }
 
                 if (!hasEntrance) continue;
-                if (count >= _number) break;
+                // Count every matching dungeon but print only the first _number, so the
+                // "...and N more" branch below becomes reachable (mirrors PrintObject).
+                if (++count > _number) continue;
 
+                PrintLine(args, message);
                 args.Context.AddString("");
             }
 
@@ -403,6 +404,10 @@ namespace Automatics.ConsoleCommands
 
                 if (hasEntrance) continue;
 
+                // Count every matching spot but print only the first _number, so the
+                // "...and N more" branch below becomes reachable (mirrors PrintObject).
+                if (++count > _number) continue;
+
                 if (defined)
                     ValheimObject.Spot.GetName(identifier, out name);
                 else
@@ -418,9 +423,6 @@ namespace Automatics.ConsoleCommands
                         "@command_printobjects_message_result",
                         localizedName, name, pos, distanceText, identifier, prefabName);
                 PrintLine(args, message);
-
-                if (++count >= _number) break;
-
                 args.Context.AddString("");
             }
 
