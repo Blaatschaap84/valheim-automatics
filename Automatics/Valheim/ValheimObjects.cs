@@ -555,7 +555,9 @@ namespace Automatics.Valheim
         private void ReportDuplicateExactMatchers()
         {
             var seen = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var element in _elements.Values)
+            // Iterate in identifier order so the "first vs duplicate" attribution in the
+            // warning is stable instead of dependent on dictionary enumeration order.
+            foreach (var element in _elements.Values.OrderBy(x => x.identifier, StringComparer.Ordinal))
             foreach (var matcher in element.matches.Where(x => x != null && !x.regex &&
                                                                !string.IsNullOrEmpty(x.value)))
             {
@@ -572,9 +574,9 @@ namespace Automatics.Valheim
 
         private void Register(IEnumerable<ObjectDataJson> jsons)
         {
-            foreach (var element in jsons.Where(x => x.type.ToLower() == _type)
+            foreach (var element in jsons.Where(x => x.type.ToLowerInvariant() == _type)
                          .OrderBy(x => x.order).SelectMany(x => x.values))
-                _elements[element.identifier.ToLower()] = CloneElement(element);
+                _elements[element.identifier.ToLowerInvariant()] = CloneElement(element);
             ReportDuplicateExactMatchers();
             UpdateElements();
         }
@@ -596,7 +598,7 @@ namespace Automatics.Valheim
                     continue;
                 }
 
-                _customElements[element.identifier.ToLower()] = CloneElement(element);
+                _customElements[element.identifier.ToLowerInvariant()] = CloneElement(element);
             }
 
             UpdateElements();
@@ -647,7 +649,7 @@ namespace Automatics.Valheim
 
         public bool GetName(string identifier, out string name)
         {
-            var key = identifier.ToLower();
+            var key = identifier.ToLowerInvariant();
             if (!_elements.TryGetValue(key, out var element) &&
                 !_customElements.TryGetValue(key, out element))
             {
@@ -672,7 +674,7 @@ namespace Automatics.Valheim
         /// </summary>
         public bool HasTag(string identifier, string tag)
         {
-            var key = identifier.ToLower();
+            var key = identifier.ToLowerInvariant();
             if (!_elements.TryGetValue(key, out var element) &&
                 !_customElements.TryGetValue(key, out element))
                 return false;
