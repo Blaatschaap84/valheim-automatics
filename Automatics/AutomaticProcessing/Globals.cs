@@ -39,35 +39,31 @@ namespace Automatics.AutomaticProcessing
                     toPos, Automatics.L10N.Translate(productName)));
         }
 
-        public static void RefuelLog(string fuelName, int count, string toName, Vector3 toPos,
-            string fromName, Vector3 fromPos)
+        // Shared body for the item-from-container-to-station transfer logs, which differ
+        // only in their format string. CraftingLog keeps its own shape (extra product arg).
+        private static void TransferLog(string format, string itemName, int count,
+            string toName, Vector3 toPos, string fromName, Vector3 fromPos)
         {
-            const string format = "Refueled {0} x{1} in {2}{3} from {4}{5}";
-            Automatics.Logger.Debug(() =>
-                string.Format(format, Automatics.L10N.Translate(fuelName), count,
-                    Automatics.L10N.Translate(toName), toPos,
-                    Automatics.L10N.Translate(fromName), fromPos));
-        }
-
-        public static void StoreLog(string productName, int count, string toName, Vector3 toPos,
-            string fromName, Vector3 fromPos)
-        {
-            const string format = "Stored {0} x{1} in {2}{3} from {4}{5}";
-            Automatics.Logger.Debug(() =>
-                string.Format(format, Automatics.L10N.Translate(productName), count,
-                    Automatics.L10N.Translate(toName), toPos,
-                    Automatics.L10N.Translate(fromName), fromPos));
-        }
-
-        public static void ChargeLog(string itemName, int count, string toName, Vector3 toPos,
-            string fromName, Vector3 fromPos)
-        {
-            const string format = "Charge {0} x{1} to {2}{3} from {4}{5}";
             Automatics.Logger.Debug(() =>
                 string.Format(format, Automatics.L10N.Translate(itemName), count,
                     Automatics.L10N.Translate(toName), toPos,
                     Automatics.L10N.Translate(fromName), fromPos));
         }
+
+        public static void RefuelLog(string fuelName, int count, string toName, Vector3 toPos,
+            string fromName, Vector3 fromPos)
+            => TransferLog("Refueled {0} x{1} in {2}{3} from {4}{5}", fuelName, count, toName,
+                toPos, fromName, fromPos);
+
+        public static void StoreLog(string productName, int count, string toName, Vector3 toPos,
+            string fromName, Vector3 fromPos)
+            => TransferLog("Stored {0} x{1} in {2}{3} from {4}{5}", productName, count, toName,
+                toPos, fromName, fromPos);
+
+        public static void ChargeLog(string itemName, int count, string toName, Vector3 toPos,
+            string fromName, Vector3 fromPos)
+            => TransferLog("Charge {0} x{1} to {2}{3} from {4}{5}", itemName, count, toName,
+                toPos, fromName, fromPos);
 
         public static bool IsAllowContainer(Container container)
         {
