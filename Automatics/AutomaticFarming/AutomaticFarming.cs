@@ -320,6 +320,9 @@ namespace Automatics.AutomaticFarming
             var startX = Mathf.Ceil((origin.x - range) / step) * step;
             var startZ = Mathf.Ceil((origin.z - range) / step) * step;
             var zone = ZoneSystem.instance;
+            // Without ZoneSystem the ground height is unknown; probing at the origin's y
+            // (player or container height) would mis-sample cultivation, so skip the pass.
+            if (zone == null) return sown;
 
             for (var x = startX; x <= maxX; x += step)
             for (var z = startZ; z <= maxZ; z += step)
@@ -332,7 +335,7 @@ namespace Automatics.AutomaticFarming
                 if (dx * dx + dz * dz > rangeSqr) continue;
 
                 var pos = new Vector3(x, origin.y, z);
-                if (zone != null) pos.y = zone.GetGroundHeight(pos);
+                pos.y = zone.GetGroundHeight(pos);
                 if (!CropPlanting.IsCultivated(pos)) continue;
                 if (!CropPlanting.CanAffordPlanting(seedPool, sapling, reserve)) return sown;
 

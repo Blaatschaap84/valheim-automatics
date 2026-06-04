@@ -1391,7 +1391,9 @@ namespace Automatics.AutomaticMapping
             for (var i = 0; i < colliders.Length; i++)
                 AddColliderBounds(colliders[i], ref sum, ref maxHeight, ref count);
 
-            if (count == 0 || sum == Vector3.zero) return false;
+            // count > 0 already proves at least one valid collider was aggregated; a zero
+            // sum is a legitimate centroid (e.g. a node centered on the world origin).
+            if (count == 0) return false;
 
             position = sum / count;
             return true;
@@ -1419,7 +1421,9 @@ namespace Automatics.AutomaticMapping
                 AddColliderBounds(collider, ref sum, ref maxHeight, ref count);
             }
 
-            if (count == 0 || sum == Vector3.zero) return false;
+            // count > 0 already proves at least one valid collider was aggregated; a zero
+            // sum is a legitimate centroid (e.g. a node centered on the world origin).
+            if (count == 0) return false;
 
             position = sum / count;
             return true;
