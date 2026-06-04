@@ -72,7 +72,10 @@ namespace Automatics.AutomaticFeeding
             var container = target.GetComponentInChildren<Container>();
             if (container == null) return false;
 
-            return container.GetInventory().GetAllItems().Any(CanConsume);
+            var inventory = container.GetInventory();
+            if (inventory == null) return false;
+
+            return inventory.GetAllItems().Any(CanConsume);
         }
 
         private bool Feeding(Humanoid humanoid, float delta)
@@ -96,6 +99,7 @@ namespace Automatics.AutomaticFeeding
             var inventory = feedBoxFound
                 ? _closestFeedBox.GetInventory()
                 : _closestFeeder.GetInventory();
+            if (inventory == null) return false;
             if (!inventory.HaveItem(_consumeTargetItem.m_shared.m_name)) return false;
 
             var canEating = true;
@@ -130,11 +134,13 @@ namespace Automatics.AutomaticFeeding
 
                 if (inventory.RemoveOneItem(_consumeTargetItem))
                 {
-                    _monsterAI.m_onConsumedItem?.Invoke(
-                        _consumeTargetItem.m_dropPrefab.GetComponent<ItemDrop>());
+                    var dropPrefab = _consumeTargetItem.m_dropPrefab;
+                    if (dropPrefab != null)
+                        _monsterAI.m_onConsumedItem?.Invoke(dropPrefab.GetComponent<ItemDrop>());
                     humanoid.m_consumeItemEffects.Create(_baseAI.transform.position,
                         Quaternion.identity);
-                    Reflections.GetField<ZSyncAnimation>(_baseAI, "m_animator").SetTrigger("consume");
+                    var animator = Reflections.GetField<ZSyncAnimation>(_baseAI, "m_animator");
+                    if (animator != null) animator.SetTrigger("consume");
 
                     _closestFeeder = null;
                     _closestFeedBox = null;
@@ -177,7 +183,10 @@ namespace Automatics.AutomaticFeeding
                 if (distance > range || distance >= closest) continue;
                 if (needGetClose && !HavePath(position)) continue;
 
-                var item = container.GetInventory().GetAllItems().FirstOrDefault(CanConsume);
+                var inventory = container.GetInventory();
+                if (inventory == null) continue;
+
+                var item = inventory.GetAllItems().FirstOrDefault(CanConsume);
                 if (item == null) continue;
 
                 closest = distance;
