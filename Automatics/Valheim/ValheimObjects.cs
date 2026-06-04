@@ -620,16 +620,29 @@ namespace Automatics.Valheim
 
         public bool GetIdentify(string name, out string identifier)
         {
-            var element = _allElements.FirstOrDefault(x =>
-                x != null && x.matches != null && x.matches.Any(y => y != null && y.Matches(name)));
-            if (element is null || !element.IsValid())
+            // Hot path: called per object on farming/mapping/mining/door passes and to
+            // fill the static-mapping cache. Plain loops avoid the per-call closure and
+            // per-element enumerator allocations of nested LINQ. Every element in
+            // _allElements was already validated at registration (built-ins in Initialize,
+            // customs in RegisterCustom) and each matcher's regex is compiled there, so we
+            // must NOT re-validate here: IsValid() recompiles every matched element's Regex.
+            for (var i = 0; i < _allElements.Count; i++)
             {
-                identifier = "";
-                return false;
+                var element = _allElements[i];
+                if (element?.matches == null) continue;
+
+                for (var j = 0; j < element.matches.Count; j++)
+                {
+                    var matcher = element.matches[j];
+                    if (matcher == null || !matcher.Matches(name)) continue;
+
+                    identifier = element.identifier;
+                    return true;
+                }
             }
 
-            identifier = element.identifier;
-            return true;
+            identifier = "";
+            return false;
         }
 
         public bool GetName(string identifier, out string name)
