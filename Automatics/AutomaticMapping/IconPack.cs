@@ -29,10 +29,16 @@ namespace Automatics.AutomaticMapping
             };
         }
 
+        // Invoked from the Minimap.UpdatePins transpiler twice per pin while the map is
+        // shown, so this is a per-pin, per-frame hot path. Bail before any work when no
+        // icon pack is loaded (the common case) and look the icon up with a plain loop to
+        // avoid the capturing-lambda closure + enumerator that FirstOrDefault allocates.
         [UsedImplicitly]
         public static float ResizeIcon(Minimap.PinData pinData, float originalSize)
         {
-            var icon = Icons.FirstOrDefault(x => x.PinType == pinData.m_type);
+            if (Icons.Count == 0) return originalSize;
+
+            var icon = FindIcon(pinData.m_type);
             if (icon == null) return originalSize;
 
             var options = icon.Options;
@@ -48,21 +54,31 @@ namespace Automatics.AutomaticMapping
                     return options.iconScaleSmallMap > 0
                         ? originalSize * options.iconScaleSmallMap
                         : originalSize;
-                case Minimap.MapMode.None:
-                    break;
                 default:
-                    throw new ArgumentOutOfRangeException();
+                    // None, or any future MapMode: never throw inside the transpiled
+                    // UpdatePins hot path; an exception there breaks map rendering.
+                    return originalSize;
             }
-
-            return originalSize;
         }
 
         [UsedImplicitly]
         public static bool IsNameTagHidden(Minimap.PinData pinData)
         {
+            if (Icons.Count == 0) return false;
             if (pinData.m_type < _vanillaPinTypeLength) return false;
-            var icon = Icons.FirstOrDefault(x => x.PinType == pinData.m_type);
+            var icon = FindIcon(pinData.m_type);
             return icon?.Options != null && icon.Options.hideNameTag;
+        }
+
+        private static Icon FindIcon(Minimap.PinType pinType)
+        {
+            for (var i = 0; i < Icons.Count; i++)
+            {
+                var icon = Icons[i];
+                if (icon.PinType == pinType) return icon;
+            }
+
+            return null;
         }
 
         public static Minimap.PinType GetPinType(Target target)

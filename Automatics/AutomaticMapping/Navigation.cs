@@ -1,4 +1,5 @@
 ﻿using System;
+using HarmonyLib;
 using ModUtils;
 using UnityEngine;
 using UnityEngine.UI;
@@ -17,13 +18,20 @@ namespace Automatics.AutomaticMapping
         private const float TextHeight = 18f;
         private const float ManualPinMapPlaneHeightEpsilon = 0.01f;
 
+        // Resolve GameCamera.m_camera through a cached field-ref delegate; the navigation
+        // overlay reads it every frame and a fresh Traverse lookup each frame is wasteful.
+        private static readonly AccessTools.FieldRef<GameCamera, Camera> CameraRef =
+            AccessTools.FieldRefAccess<GameCamera, Camera>("m_camera");
+
         private static Minimap.PinData _targetPin;
         private static GameObject _overlayObject;
         private static RectTransform _overlayRect;
         private static Text _nameText;
         private static Text _distanceText;
         private static string _displayName = string.Empty;
-        private static string _displayDistance = string.Empty;
+        // Cached as the rounded integer the overlay actually displays, so UpdateDistance
+        // can skip rebuilding the "{n}m" string every frame when the value is unchanged.
+        private static int _displayDistanceMeters = int.MinValue;
         private static bool _overlayWidthDirty;
         private static float _nextTargetPinValidationTime;
 
@@ -31,7 +39,7 @@ namespace Automatics.AutomaticMapping
         {
             _targetPin = null;
             _displayName = string.Empty;
-            _displayDistance = string.Empty;
+            _displayDistanceMeters = int.MinValue;
             _overlayWidthDirty = false;
             _nextTargetPinValidationTime = 0f;
             DestroyOverlay();
@@ -110,7 +118,7 @@ namespace Automatics.AutomaticMapping
         {
             _targetPin = pinData;
             _displayName = string.Empty;
-            _displayDistance = string.Empty;
+            _displayDistanceMeters = int.MinValue;
             _overlayWidthDirty = true;
             _nextTargetPinValidationTime = 0f;
             ShowStartMessage(pinData);
@@ -120,7 +128,7 @@ namespace Automatics.AutomaticMapping
         {
             _targetPin = null;
             _displayName = string.Empty;
-            _displayDistance = string.Empty;
+            _displayDistanceMeters = int.MinValue;
             _overlayWidthDirty = false;
             _nextTargetPinValidationTime = 0f;
             SetVisible(false);
@@ -244,12 +252,11 @@ namespace Automatics.AutomaticMapping
 
         private static void UpdateDistance(Player player, Vector3 targetPos)
         {
-            var distanceText =
-                $"{Mathf.RoundToInt(Utils.DistanceXZ(player.transform.position, targetPos))}m";
-            if (_displayDistance == distanceText) return;
+            var meters = Mathf.RoundToInt(Utils.DistanceXZ(player.transform.position, targetPos));
+            if (meters == _displayDistanceMeters) return;
 
-            _displayDistance = distanceText;
-            _distanceText.text = distanceText;
+            _displayDistanceMeters = meters;
+            _distanceText.text = meters + "m";
             _overlayWidthDirty = true;
         }
 
@@ -300,7 +307,7 @@ namespace Automatics.AutomaticMapping
         {
             if (GameCamera.instance)
             {
-                var gameCamera = Reflections.GetField<Camera>(GameCamera.instance, "m_camera");
+                var gameCamera = CameraRef(GameCamera.instance);
                 if (gameCamera) return gameCamera;
             }
 
