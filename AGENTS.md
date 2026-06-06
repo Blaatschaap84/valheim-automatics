@@ -47,6 +47,15 @@ Clean before building:
 scripts/build.sh Debug clean
 ```
 
+In-game smoke test plugin (optional developer tooling; see `smoke/README.md`).
+Build the main plugin first, then build and deploy the smoke plugin to
+`<Valheim>/BepInEx/plugins/AutomaticsSmoke`:
+
+```bash
+scripts/build.sh Debug
+scripts/build.sh smoke Debug [clean] [deploy|no-deploy]
+```
+
 Version consistency check:
 
 ```bash

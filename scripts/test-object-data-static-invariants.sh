@@ -1,4 +1,13 @@
 #!/usr/bin/env bash
+#
+# Fast static-invariant checks for the object data under Automatics/Data/Objects
+# and the source patterns that keep object/icon definitions safe to load.
+#
+# These assertions used to live alongside the in-game object-validation harness in
+# the former scripts/test-object-validation.sh. The heavy harness moved in-game
+# (smoke/Automatics.SmokeTest), but these checks are fast, run without the game,
+# and guard data/source invariants the smoke plugin cannot exhaustively cover, so
+# they are kept here. Requires `jq` and `rg`.
 
 set -euo pipefail
 
@@ -7,47 +16,6 @@ failures=0
 fail() {
   printf 'FAIL: %s\n' "$*" >&2
   failures=$((failures + 1))
-}
-
-run_harness() {
-  local tmpdir
-  local repo_root
-  tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/automatics-object-validation.XXXXXX")"
-  repo_root="$(pwd)"
-
-  cp scripts/ObjectValidationHarness.cs "$tmpdir/Program.cs"
-  cat > "$tmpdir/ObjectValidationHarness.csproj" <<EOF
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
-    <ImplicitUsings>disable</ImplicitUsings>
-    <Nullable>disable</Nullable>
-  </PropertyGroup>
-  <ItemGroup>
-    <Compile Include="$repo_root/Automatics/Valheim/ValheimObjects.cs" Link="ValheimObjects.cs" />
-    <Compile Include="$repo_root/Automatics/AutomaticMapping/IconPack.cs" Link="IconPack.cs" />
-  </ItemGroup>
-</Project>
-EOF
-  cat > "$tmpdir/NuGet.config" <<'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<configuration>
-  <packageSources>
-    <clear />
-  </packageSources>
-</configuration>
-EOF
-
-  DOTNET_CLI_HOME="$tmpdir/dotnet-home" \
-    DOTNET_NOLOGO=1 \
-    DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1 \
-    NUGET_PACKAGES="$tmpdir/packages" \
-    dotnet run --project "$tmpdir/ObjectValidationHarness.csproj" --no-launch-profile
-  local result=$?
-
-  rm -rf "$tmpdir"
-  return "$result"
 }
 
 require_source_pattern() {
@@ -60,15 +28,14 @@ require_source_pattern() {
   fi
 }
 
-if ! run_harness; then
-  fail "object validation harness failed"
-fi
-
 object_files=()
 while IFS= read -r file; do
   object_files+=("$file")
 done < <(rg --files Automatics/Data/Objects -g '*.json')
 
+# Every object data file must declare a non-empty type and an array of values,
+# each value must carry a non-empty identifier/label and at least one matcher with
+# a non-empty value, and every regex matcher must compile.
 for file in "${object_files[@]}"; do
   if ! jq -e '
     type == "object"
@@ -146,4 +113,4 @@ if ((failures > 0)); then
   exit 1
 fi
 
-printf 'PASS object validation checks\n'
+printf 'PASS object data static invariants\n'

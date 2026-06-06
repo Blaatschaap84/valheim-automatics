@@ -1,0 +1,152 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Configuration Condition="'$(Configuration)' == ''">Debug</Configuration>
+    <Platform Condition="'$(Platform)' == ''">AnyCPU</Platform>
+    <Configurations>Debug;Release</Configurations>
+    <Platforms>AnyCPU</Platforms>
+    <ProjectGuid>{AC1CEC41-DBD6-4279-ABCA-F6B144096E0C}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>Automatics.SmokeTest</RootNamespace>
+    <AssemblyName>Automatics.SmokeTest</AssemblyName>
+    <TargetFramework>net48</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AutomaticallyUseReferenceAssemblyPackages>false</AutomaticallyUseReferenceAssemblyPackages>
+    <SkipResolvePackageAssets>true</SkipResolvePackageAssets>
+    <ShouldUnsetParentConfigurationAndPlatform>false</ShouldUnsetParentConfigurationAndPlatform>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <NoWarn>$(NoWarn);NU1701</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <NormalizedPlatform Condition="'$(Platform)' == 'Any CPU'">AnyCPU</NormalizedPlatform>
+    <NormalizedPlatform Condition="'$(NormalizedPlatform)' == ''">$(Platform)</NormalizedPlatform>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(NormalizedPlatform)' == 'Debug|AnyCPU'">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(NormalizedPlatform)' == 'Release|AnyCPU'">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+
+  <Choose>
+    <When Condition="Exists('$(VALHEIM_DIR)\valheim_Data\Managed')">
+      <PropertyGroup>
+        <ValheimDirectory>$(VALHEIM_DIR)</ValheimDirectory>
+      </PropertyGroup>
+    </When>
+    <When Condition="'$(ValheimDirectory)' == '' And '$(OS)' == 'Windows_NT'">
+      <PropertyGroup>
+        <ValheimDirectory>$([MSBuild]::GetRegistryValueFromView('HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 892970', 'InstallLocation', null, RegistryView.Registry64, RegistryView.Registry32))</ValheimDirectory>
+      </PropertyGroup>
+    </When>
+  </Choose>
+
+  <PropertyGroup>
+    <BepInExDirectory Condition="Exists('$(ValheimDirectory)\BepInEx')">$(ValheimDirectory)\BepInEx</BepInExDirectory>
+    <ManagedDataDirectory Condition="Exists('$(ValheimDirectory)\valheim_Data\Managed')">$(ValheimDirectory)\valheim_Data\Managed</ManagedDataDirectory>
+    <UnityManagedDirectory Condition="Exists('$(ValheimDirectory)\unstripped_corlib')">$(ValheimDirectory)\unstripped_corlib</UnityManagedDirectory>
+    <UnityManagedDirectory Condition="'$(UnityManagedDirectory)' == '' And Exists('$(ManagedDataDirectory)')">$(ManagedDataDirectory)</UnityManagedDirectory>
+    <FrameworkPathOverride Condition="'$(OS)' != 'Windows_NT' And '$(ManagedDataDirectory)' != ''">$(ManagedDataDirectory)</FrameworkPathOverride>
+    <_TargetFrameworkDirectories Condition="'$(FrameworkPathOverride)' != ''">$(FrameworkPathOverride)</_TargetFrameworkDirectories>
+    <_FullFrameworkReferenceAssemblyPaths Condition="'$(FrameworkPathOverride)' != ''">$(FrameworkPathOverride)</_FullFrameworkReferenceAssemblyPaths>
+    <SmokeDeployDirectory>$(ValheimDirectory)\BepInEx\plugins\AutomaticsSmoke</SmokeDeployDirectory>
+    <DeploySmoke Condition="'$(DeploySmoke)' == '' And '$(ManagedDataDirectory)' != '' And '$(BepInExDirectory)' != '' And '$(Configuration)|$(NormalizedPlatform)' == 'Debug|AnyCPU'">true</DeploySmoke>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="SmokePlugin.cs" />
+  </ItemGroup>
+
+  <ItemGroup Label="BepInEx">
+    <Reference Include="0Harmony20">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>$(BepInExDirectory)\core\0Harmony.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="BepInEx">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>$(BepInExDirectory)\core\BepInEx.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup Label="Unity">
+    <Reference Include="UnityEngine">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>$(UnityManagedDirectory)\UnityEngine.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>$(UnityManagedDirectory)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup Label="Valheim">
+    <Reference Include="assembly_guiutils">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>$(ManagedDataDirectory)\assembly_guiutils.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="assembly_valheim">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>$(ManagedDataDirectory)\assembly_valheim.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup Label="Libraries">
+    <Reference Include="netstandard">
+      <HintPath>$(ManagedDataDirectory)\netstandard.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup Label="Automatics">
+    <!--
+      References the already-loaded main plugin assembly to supply the internal
+      Automatics types the checks exercise (ValheimObject/ObjectMatcher/
+      ObjectElement/IconPack/Target and the StoragePlanner routing types) plus the
+      ILRepacked ModUtils types, all via InternalsVisibleTo. Private=False so
+      MSBuild never stages a second copy of Automatics.dll into the smoke output
+      or deploy set; at runtime the CLR binds to the single BepInEx plugin copy.
+      Requires the main project to have been built in the same Configuration first.
+    -->
+    <Reference Include="Automatics">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\Automatics\bin\$(Configuration)\Automatics.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="EnsureSmokeDeployDirectoryIsKnown" BeforeTargets="GetReferenceAssemblyPaths;Build;SmokeDeploy" Condition="'$(DeploySmoke)' == 'true'">
+    <Error Condition="'$(ValheimDirectory)' == '' Or '$(ManagedDataDirectory)' == ''" Text="DeploySmoke=true requires VALHEIM_DIR to point at a Valheim install containing valheim_Data\Managed." />
+    <Error Condition="'$(BepInExDirectory)' == ''" Text="DeploySmoke=true requires VALHEIM_DIR to point at a Valheim install containing BepInEx." />
+  </Target>
+
+  <Target Name="SmokeDeploy" AfterTargets="Build" Condition="'$(DeploySmoke)' == 'true'">
+    <ItemGroup>
+      <SmokeDeployFiles Include="$(TargetDir)$(AssemblyName).dll" />
+      <SmokeDeployFiles Include="$(TargetDir)$(AssemblyName).pdb" Condition="Exists('$(TargetDir)$(AssemblyName).pdb')" />
+    </ItemGroup>
+
+    <MakeDir Directories="$(SmokeDeployDirectory)" />
+    <Copy SourceFiles="@(SmokeDeployFiles)" DestinationFolder="$(SmokeDeployDirectory)" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

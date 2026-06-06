@@ -1,0 +1,15 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Automatics.SmokeTest", "Automatics.SmokeTest\Automatics.SmokeTest.csproj", "{AC1CEC41-DBD6-4279-ABCA-F6B144096E0C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{AC1CEC41-DBD6-4279-ABCA-F6B144096E0C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AC1CEC41-DBD6-4279-ABCA-F6B144096E0C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AC1CEC41-DBD6-4279-ABCA-F6B144096E0C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AC1CEC41-DBD6-4279-ABCA-F6B144096E0C}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

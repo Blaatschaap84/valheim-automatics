@@ -1,5 +1,12 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
+// Grants the never-shipped in-game smoke-test assembly visibility into the
+// internal ValheimObject/ObjectMatcher/ObjectElement/IconPack registries and
+// the StoragePlanner snapshot types so the smoke plugin can bind to the single
+// loaded copy of Automatics.dll at runtime. Additive and production-safe.
+[assembly: InternalsVisibleTo("Automatics.SmokeTest")]
 
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
