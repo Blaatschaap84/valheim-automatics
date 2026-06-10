@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using Automatics.Valheim;
 using UnityEngine;
 
@@ -147,20 +146,27 @@ namespace Automatics.AutomaticFarming
             return isSeed ? SeedHarvestNear(position, range) : CultivationNear(position, range);
         }
 
+        // Called several times per crop per farming pass, so this stays LINQ-free:
+        // the query chain allocated an anonymous-type object per container plus
+        // enumerators and sort buffers for every call.
         private static List<Container> Near(List<DesignatedContainer> source, Vector3 position,
             float range)
         {
             var rangeSqr = range * range;
-            return source
-                .Select(x => new
-                {
-                    x.Container,
-                    DistanceSqr = (x.Position - position).sqrMagnitude
-                })
-                .Where(x => x.DistanceSqr <= rangeSqr)
-                .OrderBy(x => x.DistanceSqr)
-                .Select(x => x.Container)
-                .ToList();
+            var hits = new List<(float DistanceSqr, Container Container)>();
+            foreach (var designated in source)
+            {
+                var distanceSqr = (designated.Position - position).sqrMagnitude;
+                if (distanceSqr <= rangeSqr)
+                    hits.Add((distanceSqr, designated.Container));
+            }
+
+            hits.Sort((a, b) => a.DistanceSqr.CompareTo(b.DistanceSqr));
+
+            var result = new List<Container>(hits.Count);
+            foreach (var hit in hits)
+                result.Add(hit.Container);
+            return result;
         }
     }
 }
