@@ -13,6 +13,16 @@ namespace Automatics.AutomaticProcessing
             ChargeTimers = new Dictionary<int, float>();
         }
 
+        // Turret.OnDestroyed only fires when a turret is destroyed by damage, so
+        // timers for turrets despawned by zone unload survive in ChargeTimers and
+        // accumulate over a session. Instance IDs are also never reused across
+        // logins, so without this reset the dictionary grows for the whole game
+        // process lifetime.
+        public static void Cleanup()
+        {
+            ChargeTimers.Clear();
+        }
+
         private static ItemDrop.ItemData FindAmmoItem(Turret turret, Inventory inventory,
             bool onlyCurrentlyLoadableType)
         {

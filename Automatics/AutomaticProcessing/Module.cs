@@ -14,6 +14,7 @@ namespace Automatics.AutomaticProcessing
             {
                 Logics.Cleanup();
                 SmelterProcess.Cleanup();
+                TurretProcess.Cleanup();
                 ConnectionEffects.Cleanup();
             };
             Hooks.OnPlayerUpdate += OnPlayerUpdate;
