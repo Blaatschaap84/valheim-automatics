@@ -299,8 +299,10 @@ namespace Automatics.AutomaticDoor
 
         private bool IsExistsObstaclesBetweenTo(Player player)
         {
-            var from = Reflections.GetField<Collider>(player, "m_collider")?.bounds.center ??
-                       player.m_eye.position;
+            // Unity's lifetime check (implicit bool), not `?.`: a destroyed Collider
+            // is non-null to C# but throws on .bounds.
+            var collider = Reflections.GetField<Collider>(player, "m_collider");
+            var from = collider ? collider.bounds.center : player.m_eye.position;
             var to = _transform.position;
 
             if (!Physics.Linecast(from, to, out var hitInfo, PieceMask)) return false;
