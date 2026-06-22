@@ -89,6 +89,66 @@ namespace ModUtils
             return values;
         }
 
+        // Mirrors mod-utils Csv.ParseLine(line, trimUnquotedFields): trims only
+        // unquoted fields when requested, leaving quoted fields verbatim.
+        public static IEnumerable<string> ParseLine(string line, bool trimUnquotedFields)
+        {
+            var values = new List<string>();
+            var buffer = new StringBuilder();
+            var quoted = false;
+            var fieldQuoted = false;
+
+            for (var i = 0; i < line.Length; i++)
+            {
+                var current = line[i];
+                if (quoted)
+                {
+                    if (current == '"' && i + 1 < line.Length && line[i + 1] == '"')
+                    {
+                        buffer.Append('"');
+                        i++;
+                        continue;
+                    }
+
+                    if (current == '"')
+                    {
+                        quoted = false;
+                        continue;
+                    }
+
+                    buffer.Append(current);
+                    continue;
+                }
+
+                if (current == '"')
+                {
+                    quoted = true;
+                    fieldQuoted = true;
+                    continue;
+                }
+
+                if (current == ',')
+                {
+                    values.Add(FlushField(buffer, fieldQuoted, trimUnquotedFields));
+                    buffer.Clear();
+                    fieldQuoted = false;
+                    continue;
+                }
+
+                buffer.Append(current);
+            }
+
+            values.Add(FlushField(buffer, fieldQuoted, trimUnquotedFields));
+            return values;
+        }
+
+        private static string FlushField(StringBuilder buffer, bool fieldQuoted,
+            bool trimUnquotedFields)
+        {
+            var value = buffer.ToString();
+            return trimUnquotedFields && !fieldQuoted ? value.Trim() : value;
+        }
+
         public static string Escape(string value)
         {
             if (value.IndexOfAny(new[] { ',', '"', '\r', '\n' }) < 0)

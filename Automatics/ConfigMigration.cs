@@ -116,7 +116,7 @@ namespace Automatics
 
                     var existing = string.IsNullOrWhiteSpace(original)
                         ? new List<string>()
-                        : Csv.ParseLine(original)
+                        : Csv.ParseLine(original, true)
                             .Where(x => !string.IsNullOrEmpty(x))
                             .ToList();
 
