@@ -1,4 +1,7 @@
-﻿using System.Linq;
+﻿using System;
+using System.Collections.Generic;
+using Automatics.Valheim;
+using HarmonyLib;
 using ModUtils;
 using UnityEngine;
 
@@ -7,6 +10,12 @@ namespace Automatics.AutomaticFeeding
     [DisallowMultipleComponent]
     internal class AutomaticFeeding : MonoBehaviour
     {
+        // MonsterAI.CanConsume resolved once into a cached delegate so the
+        // per-AI-tick food check never allocates a Traverse + params array per
+        // item. The guarded bind falls back to reflection if Valheim renames it.
+        private static readonly Func<MonsterAI, ItemDrop.ItemData, bool> ConsumeCheck;
+
+        private readonly List<Container> _feedBoxBuffer = new List<Container>();
         private Tameable _tamable;
         private Character _character;
         private MonsterAI _monsterAI;
@@ -15,6 +24,32 @@ namespace Automatics.AutomaticFeeding
         private Container _closestFeedBox;
         private Humanoid _closestFeeder;
         private ItemDrop.ItemData _consumeTargetItem;
+
+        static AutomaticFeeding()
+        {
+            ConsumeCheck = BindConsumeCheck();
+        }
+
+        private static Func<MonsterAI, ItemDrop.ItemData, bool> BindConsumeCheck()
+        {
+            try
+            {
+                var method = AccessTools.Method(typeof(MonsterAI), "CanConsume",
+                    new[] { typeof(ItemDrop.ItemData) });
+                if (method != null)
+                    return AccessTools
+                        .MethodDelegate<Func<MonsterAI, ItemDrop.ItemData, bool>>(method);
+                Automatics.Logger.Warning(() =>
+                    "MonsterAI.CanConsume not found; falling back to reflection.");
+            }
+            catch (Exception e)
+            {
+                Automatics.Logger.Warning(() =>
+                    $"Failed to bind MonsterAI.CanConsume delegate; falling back to reflection: {e.Message}");
+            }
+
+            return null;
+        }
 
         private void Awake()
         {
@@ -68,13 +103,13 @@ namespace Automatics.AutomaticFeeding
             var inventory = container.GetInventory();
             if (inventory == null) return false;
 
-            return inventory.GetAllItems().Any(CanConsume);
+            return FindConsumable(inventory) != null;
         }
 
         private bool Feeding(Humanoid humanoid, float delta)
         {
             if (!HasNetworkOwnership()) return false;
-            if (_monsterAI.m_consumeItems == null || !_monsterAI.m_consumeItems.Any())
+            if (_monsterAI.m_consumeItems == null || _monsterAI.m_consumeItems.Count == 0)
                 return false;
 
             _consumeSearchTimer += delta;
@@ -122,19 +157,29 @@ namespace Automatics.AutomaticFeeding
 
             if (canEating)
             {
-                // The owner of the inventory must apply the mutation so the
-                // change is persisted into the ZDO and replicated. Containers
-                // can have ownership claimed before mutating; player feeders
-                // are pre-filtered to the local player in FindFeeder so the
-                // local inventory is always authoritative here.
-                if (feedBoxFound &&
-                    Objects.GetZNetView(_closestFeedBox, out var feedBoxZNetView) &&
-                    feedBoxZNetView.IsValid())
+                // Owner-only removal: claim ownership, then bail unless this peer
+                // can mutate the feed box right now, so an item is never removed
+                // from a chest a player has open or another peer/server owns
+                // (which would desync the container). Mirrors
+                // SeedPool.RemoveFromContainer. Player feeders are pre-filtered to
+                // the local player in FindFeeder, so their inventory is always
+                // authoritative and needs no extra guard.
+                if (feedBoxFound)
                 {
-                    feedBoxZNetView.ClaimOwnership();
+                    if (!ContainerAccess.TryClaimContainer(_closestFeedBox)) return true;
+                    if (!ContainerAccess.TryPrepareOwnedContainerMutation(_closestFeedBox))
+                        return true;
+                    // Re-fetch the inventory after taking ownership so the
+                    // post-ownership (possibly ZDO-reloaded) instance is mutated.
+                    inventory = _closestFeedBox.GetInventory();
+                    if (inventory == null) return true;
                 }
 
-                if (inventory.RemoveOneItem(_consumeTargetItem))
+                // Re-resolve the live item by name: the target captured before the
+                // ownership claim can be a stale ItemData that RemoveOneItem would
+                // silently no-op on.
+                var item = inventory.GetItem(_consumeTargetItem.m_shared.m_name);
+                if (item != null && inventory.RemoveOneItem(item))
                 {
                     var dropPrefab = _consumeTargetItem.m_dropPrefab;
                     if (dropPrefab != null)
@@ -177,8 +222,12 @@ namespace Automatics.AutomaticFeeding
             var origin = _baseAI.transform.position;
             var closest = float.MaxValue;
 
-            foreach (var container in ContainerCache.GetAllInstance())
+            ContainerCache.Fill(_feedBoxBuffer);
+            for (var i = 0; i < _feedBoxBuffer.Count; i++)
             {
+                var container = _feedBoxBuffer[i];
+                if (container == null) continue;
+
                 var position = container.transform.position;
                 var distance = Vector3.Distance(position, origin);
 
@@ -188,7 +237,7 @@ namespace Automatics.AutomaticFeeding
                 var inventory = container.GetInventory();
                 if (inventory == null) continue;
 
-                var item = inventory.GetAllItems().FirstOrDefault(CanConsume);
+                var item = FindConsumable(inventory);
                 if (item == null) continue;
 
                 closest = distance;
@@ -213,7 +262,7 @@ namespace Automatics.AutomaticFeeding
             if (distance > searchRange) return;
             if (needGetClose && !HavePath(position)) return;
 
-            var item = localPlayer.GetInventory().GetAllItems().FirstOrDefault(CanConsume);
+            var item = FindConsumable(localPlayer.GetInventory());
             if (item == null) return;
 
             _closestFeeder = localPlayer;
@@ -222,7 +271,21 @@ namespace Automatics.AutomaticFeeding
 
         private bool CanConsume(ItemDrop.ItemData item)
         {
-            return Reflections.InvokeMethod<bool>(_monsterAI, "CanConsume", item);
+            return ConsumeCheck != null
+                ? ConsumeCheck(_monsterAI, item)
+                : Reflections.InvokeMethod<bool>(_monsterAI, "CanConsume", item);
+        }
+
+        private ItemDrop.ItemData FindConsumable(Inventory inventory)
+        {
+            var items = inventory.GetAllItems();
+            for (var i = 0; i < items.Count; i++)
+            {
+                var item = items[i];
+                if (CanConsume(item)) return item;
+            }
+
+            return null;
         }
 
         private bool HavePath(Vector3 target)
