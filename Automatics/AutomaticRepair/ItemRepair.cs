@@ -40,7 +40,11 @@ namespace Automatics.AutomaticRepair
 
             WornItemsBuffer.Clear();
             player.GetInventory().GetWornItems(WornItemsBuffer);
-            return WornItemsBuffer.Count(x => RepairOne(player, station, x));
+            var repaired = 0;
+            foreach (var item in WornItemsBuffer)
+                if (RepairOne(player, station, item))
+                    repaired++;
+            return repaired;
         }
 
         private static bool CanUseRepairStation(Player player, CraftingStation station)
@@ -95,20 +99,28 @@ namespace Automatics.AutomaticRepair
 
         public static void Repair(Player player)
         {
-            if (Config.CraftingStationSearchRange <= 0) return;
-
+            // No-cost-cheat repair needs no crafting station, so it must not be
+            // gated by the station search range (which can be set to 0 to disable
+            // only the station-based path).
             if (player.NoCostCheat())
             {
                 ShowRepairMessage(player, RepairAll(player, null));
                 return;
             }
 
+            if (Config.CraftingStationSearchRange <= 0) return;
+
             var range = Config.CraftingStationSearchRange;
             var origin = player.transform.position;
-            var count = (from x in GetAllCraftingStations()
-                let distance = Vector3.Distance(origin, x.transform.position)
-                where distance <= range && x.CheckUsable(player, false)
-                select RepairAll(player, x)).Sum();
+            var count = 0;
+            foreach (var station in GetAllCraftingStations())
+            {
+                // Unity-lifetime guard: m_allStations can hold a destroyed station.
+                if (station == null) continue;
+                if (Vector3.Distance(origin, station.transform.position) > range) continue;
+                if (!station.CheckUsable(player, false)) continue;
+                count += RepairAll(player, station);
+            }
 
             ShowRepairMessage(player, count);
         }

@@ -14,6 +14,14 @@ namespace Automatics.AutomaticRepair
 
         private static bool _skipRadiusMethodLookup;
 
+        // Reused scratch buffers for the once/sec, single-local-player, fully
+        // synchronous repair scan, matching the NonAlloc convention used elsewhere.
+        // Each returned buffer is consumed entirely within Repair before the next
+        // scan, and the scan is never reentrant, so sharing is safe.
+        private static readonly List<Piece> PieceBuffer = new List<Piece>();
+        private static readonly HashSet<Piece> PieceSet = new HashSet<Piece>();
+        private static readonly Collider[] ColliderBuffer = new Collider[256];
+
         private static void ShowRepairMessage(Player player, int repairCount)
         {
             if (repairCount == 0) return;
@@ -45,6 +53,7 @@ namespace Automatics.AutomaticRepair
 
         private static bool TryGetRepairTool(Player player, out ItemDrop.ItemData tool)
         {
+            // Humanoid.GetRightItem() is protected, so it must be reached reflectively.
             tool = Reflections.InvokeMethod<ItemDrop.ItemData>(player, "GetRightItem");
             return IsRepairAction(player, tool);
         }
@@ -112,7 +121,8 @@ namespace Automatics.AutomaticRepair
         {
             if (_skipRadiusMethodLookup || GetAllPiecesInRadiusMethod == null) return null;
 
-            var resultBuffer = new List<Piece>();
+            PieceBuffer.Clear();
+            var resultBuffer = PieceBuffer;
             try
             {
                 var args =
@@ -145,15 +155,16 @@ namespace Automatics.AutomaticRepair
             if (pieces != null)
                 return pieces;
 
-            var nearbyPieces = new HashSet<Piece>();
-            foreach (var collider in Physics.OverlapSphere(origin, range))
+            PieceSet.Clear();
+            var size = Physics.OverlapSphereNonAlloc(origin, range, ColliderBuffer);
+            for (var i = 0; i < size; i++)
             {
-                var piece = collider.GetComponentInParent<Piece>();
+                var piece = ColliderBuffer[i].GetComponentInParent<Piece>();
                 if (piece != null)
-                    nearbyPieces.Add(piece);
+                    PieceSet.Add(piece);
             }
 
-            return nearbyPieces;
+            return PieceSet;
         }
 
         public static void Repair(Player player)
