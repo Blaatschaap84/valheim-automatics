@@ -30,6 +30,7 @@ namespace Automatics.AutomaticMapping
         private static readonly long[] ElapsedTicks = new long[SlotCount];
         private static readonly long[] CallCount = new long[SlotCount];
         private static long _flushAnchor;
+        private static bool _wasEnabled;
 
         public static bool IsEnabled => Config.MappingPerformanceLog;
 
@@ -40,7 +41,20 @@ namespace Automatics.AutomaticMapping
 
         public static void FlushIfDue()
         {
-            if (!IsEnabled) return;
+            if (!IsEnabled)
+            {
+                _wasEnabled = false;
+                return;
+            }
+
+            if (!_wasEnabled)
+            {
+                // off->on edge: drop accumulators/anchor left over from before the
+                // disable so the first post-re-enable interval is measured cleanly.
+                Reset();
+                _wasEnabled = true;
+                return;
+            }
 
             var now = Stopwatch.GetTimestamp();
             if (_flushAnchor == 0L)

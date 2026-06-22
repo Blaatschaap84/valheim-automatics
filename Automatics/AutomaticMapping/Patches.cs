@@ -339,6 +339,12 @@ namespace Automatics.AutomaticMapping
         {
             Map.ClearAutomaticPins();
             PinIndex.Clear();
+            // Drain the module caches too: ClearPins destroys the markers without
+            // calling Minimap.RemovePin per pin, so the per-pin OnRemovePin heal
+            // never fires and these caches would otherwise keep orphaned PinData
+            // that permanently suppresses re-pinning for the rest of the session.
+            DynamicObjectMapping.Cleanup();
+            StaticObjectMapping.Cleanup();
         }
 
         // Clears PinIndex on world unload. Without this, the index keeps

@@ -147,7 +147,9 @@ namespace Automatics.AutomaticMapping
                 count++;
             }
 
-            if (count == 0 || sum == Vector3.zero)
+            // count > 0 already proves at least one live collider was aggregated;
+            // a zero sum is a legitimate centroid (matches the sibling mineral paths).
+            if (count == 0)
             {
                 position = Vector3.zero;
                 maxHeight = float.MinValue;
