@@ -162,7 +162,9 @@ namespace Automatics.AutomaticFarming
                 // Storage is the priority deposit target; the matching planting box is
                 // the self-contained fallback. Storage and planting roles never
                 // overlap, so the concatenation has no duplicates.
-                var depositTargets = new List<Container>(containers.StorageNear(position, range));
+                // StorageNear returns a fresh caller-owned list, so AddRange can
+                // extend it in place without the extra defensive copy.
+                var depositTargets = containers.StorageNear(position, range);
                 depositTargets.AddRange(matchingPlanting);
 
                 // Replant input comes only from the matching-role boxes near the spot.
