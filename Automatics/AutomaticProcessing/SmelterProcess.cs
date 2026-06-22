@@ -13,8 +13,17 @@ namespace Automatics.AutomaticProcessing
         private static readonly HashSet<ZDOID> SkipQuickRefuel;
         private static readonly HashSet<ZDOID> FirstQuickRefuel;
 
+        // The per-frame Craft/Refuel postfixes (Smelter.UpdateSmelter runs every
+        // frame on the owner) throttle their nearby-container scan: after a pass
+        // that adds nothing, the smelter is skipped for ~1s instead of re-running
+        // the Dictionary/List/LINQ scan every frame. Mirrors the QuickCraft path.
+        private static readonly HashSet<ZDOID> SkipCraft;
+        private static readonly HashSet<ZDOID> SkipRefuel;
+
         private static float _lastQuickCraftReset;
         private static float _lastQuickRefuelReset;
+        private static float _lastCraftReset;
+        private static float _lastRefuelReset;
 
         static SmelterProcess()
         {
@@ -22,6 +31,8 @@ namespace Automatics.AutomaticProcessing
             FirstQuickCraft = new HashSet<ZDOID>();
             SkipQuickRefuel = new HashSet<ZDOID>();
             FirstQuickRefuel = new HashSet<ZDOID>();
+            SkipCraft = new HashSet<ZDOID>();
+            SkipRefuel = new HashSet<ZDOID>();
         }
 
         private static Smelter.ItemConversion GetItemConversion(Smelter smelter, string queuedOre)
@@ -35,6 +46,8 @@ namespace Automatics.AutomaticProcessing
             FirstQuickCraft.Clear();
             SkipQuickRefuel.Clear();
             FirstQuickRefuel.Clear();
+            SkipCraft.Clear();
+            SkipRefuel.Clear();
         }
 
         [UsedImplicitly]
@@ -137,6 +150,15 @@ namespace Automatics.AutomaticProcessing
             var smelterName = smelter.m_name;
             if (!Logics.IsAllowProcessing(smelterName, Process.Craft)) return;
 
+            if (Time.time - _lastCraftReset > 1f)
+            {
+                _lastCraftReset = Time.time;
+                SkipCraft.Clear();
+            }
+
+            var uid = zNetView.GetZDO().m_uid;
+            if (SkipCraft.Contains(uid)) return;
+
             var oreCount = zNetView.GetZDO().GetInt("queued");
             if (oreCount >= smelter.m_maxOre) return;
             if (Config.SupplyOnlyWhenMaterialsRunOut(smelterName) && oreCount > 0) return;
@@ -168,6 +190,7 @@ namespace Automatics.AutomaticProcessing
                 .Select(x => (x.container, x.container.GetInventory()))
                 .ToList();
 
+            var oreAdded = false;
             foreach (var conversion in conversions)
             {
                 Container materialContainer = null;
@@ -211,9 +234,13 @@ namespace Automatics.AutomaticProcessing
                     Logics.CraftingLog(materialData.m_name, 1,
                         materialContainer.m_name, materialContainer.transform.position, smelterName,
                         origin, productData.m_name);
+
+                    oreAdded = true;
                     break;
                 }
             }
+
+            if (!oreAdded) SkipCraft.Add(uid);
         }
 
         [UsedImplicitly]
@@ -288,6 +315,15 @@ namespace Automatics.AutomaticProcessing
             var smelterName = smelter.m_name;
             if (!Logics.IsAllowProcessing(smelterName, Process.Refuel)) return;
 
+            if (Time.time - _lastRefuelReset > 1f)
+            {
+                _lastRefuelReset = Time.time;
+                SkipRefuel.Clear();
+            }
+
+            var uid = zNetView.GetZDO().m_uid;
+            if (SkipRefuel.Contains(uid)) return;
+
             var fuel = zNetView.GetZDO().GetFloat("fuel");
             if (fuel >= smelter.m_maxFuel - 1) return;
             if (Config.RefuelOnlyWhenOutOfFuel(smelterName) && fuel > 0f) return;
@@ -300,6 +336,7 @@ namespace Automatics.AutomaticProcessing
             var origin = transform.position;
             var fuelName = smelter.m_fuelItem.m_itemData.m_shared.m_name;
 
+            var fuelAdded = false;
             foreach (var (container, _) in Logics.GetNearbyContainers(smelterName, origin))
             {
                 var inventory = container.GetInventory();
@@ -311,8 +348,12 @@ namespace Automatics.AutomaticProcessing
 
                 Logics.RefuelLog(fuelName, 1, smelterName, origin, container.m_name,
                     container.transform.position);
+
+                fuelAdded = true;
                 break;
             }
+
+            if (!fuelAdded) SkipRefuel.Add(uid);
         }
 
         public static bool Store(Smelter smelter, string ore, int stack)

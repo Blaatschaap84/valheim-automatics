@@ -31,6 +31,13 @@ namespace Automatics.AutomaticProcessing
         private static float _nextRefreshTime;
         private static ConnectionTemplate _template;
 
+        // Memoize the hovered GameObject -> ProcessorContext resolution so the up
+        // to five GetComponentInParent calls in TryGetProcessorContext only run
+        // when the hovered object actually changes.
+        private static GameObject _lastHovering;
+        private static ProcessorContext _lastContext;
+        private static bool _lastContextValid;
+
         static ConnectionEffects()
         {
             ActiveHelpers = new Dictionary<int, ConnectionHelper>();
@@ -44,6 +51,9 @@ namespace Automatics.AutomaticProcessing
             ActiveHelpers.Clear();
             _currentProcessorId = 0;
             _nextRefreshTime = 0f;
+            _lastHovering = null;
+            _lastContextValid = false;
+            _lastContext = default;
         }
 
         public static void Update(Player player)
@@ -61,10 +71,27 @@ namespace Automatics.AutomaticProcessing
                 return;
             }
 
-            if (!TryGetProcessorContext(hovering, out var context))
+            ProcessorContext context;
+            if (hovering == _lastHovering)
             {
-                Cleanup();
-                return;
+                if (!_lastContextValid)
+                {
+                    Cleanup();
+                    return;
+                }
+
+                context = _lastContext;
+            }
+            else
+            {
+                _lastHovering = hovering;
+                _lastContextValid = TryGetProcessorContext(hovering, out context);
+                _lastContext = context;
+                if (!_lastContextValid)
+                {
+                    Cleanup();
+                    return;
+                }
             }
 
             if (Config.ContainerSearchRange(context.Name) <= 0f || !HasSourceProcess(context.Name))
@@ -80,7 +107,7 @@ namespace Automatics.AutomaticProcessing
         private static bool HasSourceProcess(string processorName)
         {
             return (Config.AllowProcessing(processorName) &
-                    (Process.Craft | Process.Refuel | Process.Charge)) != 0;
+                    (Process.Store | Process.Craft | Process.Refuel | Process.Charge)) != 0;
         }
 
         private static void Refresh(ProcessorContext context)

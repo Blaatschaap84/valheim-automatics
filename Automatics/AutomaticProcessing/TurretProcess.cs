@@ -1,5 +1,6 @@
-﻿using System.Collections.Generic;
-using System.Linq;
+﻿using System;
+using System.Collections.Generic;
+using HarmonyLib;
 using ModUtils;
 
 namespace Automatics.AutomaticProcessing
@@ -8,9 +9,36 @@ namespace Automatics.AutomaticProcessing
     {
         private static readonly Dictionary<int, float> ChargeTimers;
 
+        // Turret.FindAmmoItem resolved once into a cached delegate so the per-
+        // charge-tick ammo lookup does not allocate a Traverse + params array per
+        // nearby container. Guarded bind falls back to reflection if it is renamed.
+        private static readonly Func<Turret, Inventory, bool, ItemDrop.ItemData> FindAmmo;
+
         static TurretProcess()
         {
             ChargeTimers = new Dictionary<int, float>();
+            FindAmmo = BindFindAmmoItem();
+        }
+
+        private static Func<Turret, Inventory, bool, ItemDrop.ItemData> BindFindAmmoItem()
+        {
+            try
+            {
+                var method = AccessTools.Method(typeof(Turret), "FindAmmoItem",
+                    new[] { typeof(Inventory), typeof(bool) });
+                if (method != null)
+                    return AccessTools
+                        .MethodDelegate<Func<Turret, Inventory, bool, ItemDrop.ItemData>>(method);
+                Automatics.Logger.Warning(() =>
+                    "Turret.FindAmmoItem not found; falling back to reflection.");
+            }
+            catch (Exception e)
+            {
+                Automatics.Logger.Warning(() =>
+                    $"Failed to bind Turret.FindAmmoItem delegate; falling back to reflection: {e.Message}");
+            }
+
+            return null;
         }
 
         // Turret.OnDestroyed only fires when a turret is destroyed by damage, so
@@ -26,8 +54,10 @@ namespace Automatics.AutomaticProcessing
         private static ItemDrop.ItemData FindAmmoItem(Turret turret, Inventory inventory,
             bool onlyCurrentlyLoadableType)
         {
-            return Reflections.InvokeMethod<ItemDrop.ItemData>(turret, "FindAmmoItem", inventory,
-                onlyCurrentlyLoadableType);
+            return FindAmmo != null
+                ? FindAmmo(turret, inventory, onlyCurrentlyLoadableType)
+                : Reflections.InvokeMethod<ItemDrop.ItemData>(turret, "FindAmmoItem", inventory,
+                    onlyCurrentlyLoadableType);
         }
 
         private static bool CanCharge(Turret turret, float delta)
@@ -69,10 +99,9 @@ namespace Automatics.AutomaticProcessing
                 var item = FindAmmoItem(turret, inventory, true);
                 if (item == null && turret.GetAmmo() == 0)
                 {
-                    foreach (var ammoName in turret.m_allowedAmmo.Select(type =>
-                                 type.m_ammo.m_itemData.m_shared.m_name))
+                    foreach (var ammo in turret.m_allowedAmmo)
                     {
-                        item = inventory.GetAmmoItem(ammoName);
+                        item = inventory.GetAmmoItem(ammo.m_ammo.m_itemData.m_shared.m_name);
                         if (item != null) break;
                     }
                 }
