@@ -2,7 +2,6 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using Automatics.Valheim;
 using ModUtils;
 using UnityEngine;
@@ -12,6 +11,14 @@ namespace Automatics.AutomaticPickup
     [DisallowMultipleComponent]
     internal sealed class AutomaticPickup : MonoBehaviour
     {
+        // Reused snapshot buffers so each pickup pass does not allocate a fresh
+        // List by enumerating the instance caches (Fill copies into these).
+        private static readonly List<Pickable> PickableBuffer = new List<Pickable>();
+        private static readonly List<PickableItem> PickableItemBuffer =
+            new List<PickableItem>();
+        private static readonly List<ItemDrop> EmptyItemDrops = new List<ItemDrop>();
+
+        private readonly WaitForSeconds _idleWait = new WaitForSeconds(0.1f);
         private Player _player;
         private float _pickupTimer;
         private bool _active;
@@ -35,7 +42,7 @@ namespace Automatics.AutomaticPickup
         {
             while (true)
             {
-                while (!_active) yield return new WaitForSeconds(0.1f);
+                while (!_active) yield return _idleWait;
                 _active = false;
 
                 if (Config.PickupAllNearbyKey.MainKey == KeyCode.None)
@@ -140,12 +147,25 @@ namespace Automatics.AutomaticPickup
             var origin = player.transform.position;
 
             var range = Config.AutomaticPickupRange;
-            foreach (var pickableItem in PickableItemCache.GetAllInstance())
+            var rangeSq = range * range;
+            PickableItemCache.Fill(PickableItemBuffer);
+            for (var i = 0; i < PickableItemBuffer.Count; i++)
             {
-                if (Vector3.Distance(origin, pickableItem.transform.position) > range) continue;
+                var pickableItem = PickableItemBuffer[i];
+                if (!pickableItem) continue;
+                if ((origin - pickableItem.transform.position).sqrMagnitude > rangeSq) continue;
                 if (!predicate.Invoke(pickableItem)) continue;
                 if (Objects.GetZNetView(pickableItem, out var zNetView) && zNetView.IsValid())
-                    PickPickableItem(player, pickableItem, zNetView);
+                    // Isolate per-object failures so one bad pickable never aborts
+                    // the pass or tears down the picking coroutine.
+                    try
+                    {
+                        PickPickableItem(player, pickableItem, zNetView);
+                    }
+                    catch (Exception e)
+                    {
+                        Automatics.Logger.Debug(() => $"Pickup skipped object: {e}");
+                    }
             }
         }
 
@@ -154,9 +174,13 @@ namespace Automatics.AutomaticPickup
             var origin = player.transform.position;
 
             var range = Config.AutomaticPickupRange;
-            foreach (var pickable in PickableCache.GetAllInstance())
+            var rangeSq = range * range;
+            PickableCache.Fill(PickableBuffer);
+            for (var i = 0; i < PickableBuffer.Count; i++)
             {
-                if (Vector3.Distance(origin, pickable.transform.position) > range) continue;
+                var pickable = PickableBuffer[i];
+                if (!pickable) continue;
+                if ((origin - pickable.transform.position).sqrMagnitude > rangeSq) continue;
                 if (!predicate.Invoke(pickable)) continue;
 
                 if (pickable.m_tarPreventsPicking)
@@ -174,7 +198,14 @@ namespace Automatics.AutomaticPickup
                 }
 
                 if (Objects.GetZNetView(pickable, out var zNetView) && zNetView.IsValid())
-                    PickableHarvester.Harvest(player, pickable, zNetView);
+                    try
+                    {
+                        PickableHarvester.Harvest(player, pickable, zNetView);
+                    }
+                    catch (Exception e)
+                    {
+                        Automatics.Logger.Debug(() => $"Pickup skipped object: {e}");
+                    }
             }
         }
 
@@ -183,15 +214,28 @@ namespace Automatics.AutomaticPickup
             var origin = player.transform.position;
 
             var range = Config.AutomaticPickupRange;
-            foreach (var itemDrop in GetAllItemDrop())
+            var rangeSq = range * range;
+            // Indexed loop over the game's live ItemDrop list: ItemDrop.Pickup can
+            // remove an entry mid-iteration, which would make a foreach enumerator
+            // throw (collection modified) and abort the whole pass.
+            var itemDrops = GetAllItemDrop();
+            for (var i = 0; i < itemDrops.Count; i++)
             {
+                var itemDrop = itemDrops[i];
                 if (!itemDrop) continue;
                 if (itemDrop.IsPiece()) continue;
-                if (Vector3.Distance(origin, itemDrop.transform.position) > range) continue;
+                if ((origin - itemDrop.transform.position).sqrMagnitude > rangeSq) continue;
                 if (!predicate.Invoke(itemDrop)) continue;
                 if (itemDrop.InTar()) continue;
                 if (Objects.GetZNetView(itemDrop, out var zNetView) && zNetView.GetZDO() != null)
-                    PickItemDrop(player, itemDrop);
+                    try
+                    {
+                        PickItemDrop(player, itemDrop);
+                    }
+                    catch (Exception e)
+                    {
+                        Automatics.Logger.Debug(() => $"Pickup skipped object: {e}");
+                    }
             }
         }
 
@@ -199,6 +243,10 @@ namespace Automatics.AutomaticPickup
             ZNetView zNetView)
         {
             if (Reflections.GetField<bool>(pickableItem, "m_picked")) return;
+            // Guard the prefab the way GetPickableItemName already does: vanilla
+            // GetStackSize falls back to m_itemPrefab.m_itemData when the ZDO has
+            // no stored stack, so this must precede the GetStackSize call below.
+            if (!pickableItem.m_itemPrefab) return;
 
             var stackSize = Reflections.InvokeMethod<int>(pickableItem, "GetStackSize");
             if (stackSize <= 0) return;
@@ -247,11 +295,11 @@ namespace Automatics.AutomaticPickup
                 rigidbody.linearVelocity = Vector3.up * 4f;
         }
 
-        private static IEnumerable<ItemDrop> GetAllItemDrop()
+        private static List<ItemDrop> GetAllItemDrop()
         {
             return Reflections.GetStaticField<ItemDrop, List<ItemDrop>>("s_instances") ??
                    Reflections.GetStaticField<ItemDrop, List<ItemDrop>>("m_instances") ??
-                   Enumerable.Empty<ItemDrop>();
+                   EmptyItemDrops;
         }
     }
 }
