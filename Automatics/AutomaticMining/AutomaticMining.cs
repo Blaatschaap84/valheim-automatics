@@ -55,9 +55,19 @@ namespace Automatics.AutomaticMining
             // is attached to every Destructible in the world (barrels, crates, ...), so the
             // old `let distance` ran Vector3.Distance for all of them each tick. Keep ToList
             // since Mining() can destroy a node and mutate AllInstance mid-iteration.
+            //
+            // A cheap squared-distance pre-reject runs before the per-instance name match
+            // and the sort. The margin is deliberately generous: large MineRock/MineRock5
+            // nodes (silver vein, obsidian, petrified bone/soft tissue) have a root pivot
+            // far from their hit colliders, and the precise per-collider eye->hit check
+            // inside Mining() still enforces the exact range, so an over-generous margin
+            // only costs a few extra name matches, never a missed mine.
+            var maxRange = Config.MiningRange > 0 ? Config.MiningRange : 32;
+            var cullSqr = (maxRange + 24f) * (maxRange + 24f);
             var automaticMinings = (from x in AllInstance
                     where x._zNetView.IsValid() &&
                           x._zNetView.HasOwner() &&
+                          (x.transform.position - origin).sqrMagnitude <= cullSqr &&
                           IsAllowMiningMinerals(x._component)
                     orderby Vector3.Distance(origin, x.transform.position)
                     select x).ToList();
