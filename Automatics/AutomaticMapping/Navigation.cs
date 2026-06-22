@@ -26,9 +26,13 @@ namespace Automatics.AutomaticMapping
         private static Minimap.PinData _targetPin;
         private static GameObject _overlayObject;
         private static RectTransform _overlayRect;
+        private static Canvas _overlayCanvas;
         private static Text _nameText;
         private static Text _distanceText;
         private static string _displayName = string.Empty;
+        // Raw (unlocalized) pin name reference last seen, so UpdateName can skip
+        // re-localizing every frame when the source m_name reference is unchanged.
+        private static string _rawPinName;
         // Cached as the rounded integer the overlay actually displays, so UpdateDistance
         // can skip rebuilding the "{n}m" string every frame when the value is unchanged.
         private static int _displayDistanceMeters = int.MinValue;
@@ -39,6 +43,7 @@ namespace Automatics.AutomaticMapping
         {
             _targetPin = null;
             _displayName = string.Empty;
+            _rawPinName = null;
             _displayDistanceMeters = int.MinValue;
             _overlayWidthDirty = false;
             _nextTargetPinValidationTime = 0f;
@@ -118,6 +123,7 @@ namespace Automatics.AutomaticMapping
         {
             _targetPin = pinData;
             _displayName = string.Empty;
+            _rawPinName = null;
             _displayDistanceMeters = int.MinValue;
             _overlayWidthDirty = true;
             _nextTargetPinValidationTime = 0f;
@@ -128,6 +134,7 @@ namespace Automatics.AutomaticMapping
         {
             _targetPin = null;
             _displayName = string.Empty;
+            _rawPinName = null;
             _displayDistanceMeters = int.MinValue;
             _overlayWidthDirty = false;
             _nextTargetPinValidationTime = 0f;
@@ -157,6 +164,7 @@ namespace Automatics.AutomaticMapping
                 typeof(CanvasRenderer), typeof(Image));
             _overlayRect = _overlayObject.GetComponent<RectTransform>();
             _overlayRect.SetParent(parent, false);
+            _overlayCanvas = _overlayRect.GetComponentInParent<Canvas>();
             _overlayRect.anchorMin = new Vector2(0.5f, 0.5f);
             _overlayRect.anchorMax = new Vector2(0.5f, 0.5f);
             _overlayRect.pivot = new Vector2(0.5f, 0.5f);
@@ -242,6 +250,13 @@ namespace Automatics.AutomaticMapping
 
         private static void UpdateName()
         {
+            // Skip the Replace/Trim/Localize work when the source m_name reference
+            // is unchanged; static pins assign m_name once and dynamic pins only on
+            // the scan interval, so the reference is stable between frames.
+            var raw = _targetPin?.m_name;
+            if (ReferenceEquals(raw, _rawPinName)) return;
+            _rawPinName = raw;
+
             var name = GetDisplayPinName(_targetPin);
             if (_displayName == name) return;
 
@@ -265,7 +280,7 @@ namespace Automatics.AutomaticMapping
             var parent = _overlayRect.parent as RectTransform;
             if (!parent) return;
 
-            var canvas = _overlayRect.GetComponentInParent<Canvas>();
+            var canvas = _overlayCanvas;
             var uiCamera = canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay
                 ? canvas.worldCamera
                 : null;
@@ -321,6 +336,7 @@ namespace Automatics.AutomaticMapping
 
             _overlayObject = null;
             _overlayRect = null;
+            _overlayCanvas = null;
             _nameText = null;
             _distanceText = null;
         }

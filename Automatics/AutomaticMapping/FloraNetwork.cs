@@ -77,12 +77,20 @@ namespace Automatics.AutomaticMapping
         {
             if (!IsValid()) return;
 
-            foreach (var node in ObjectNodes
-                         .Where(node => node != null && node.IsValid() && IsConnectable(node))
-                         .ToList())
+            // Direct iteration with the cheapest rejections first (name before the
+            // squared distance), instead of a per-call LINQ Where().ToList() over
+            // every flora node in the world (O(N^2) plus a List allocation per node
+            // during chunk streaming). Safe: the merge body only mutates per-network
+            // membership, never the static ObjectNodes set being iterated.
+            var thisPos = Position;
+            var thisName = Name;
+            var mergeRangeSqr = (float)Config.FloraPinMergeRange * Config.FloraPinMergeRange;
+            foreach (var node in ObjectNodes)
             {
-                if (ReferenceEquals(node, this)) continue;
+                if (node == null || ReferenceEquals(node, this) || !node.IsValid()) continue;
                 if (Network != null && ReferenceEquals(Network, node.Network)) continue;
+                if (thisName != node.Name) continue;
+                if ((thisPos - node.Position).sqrMagnitude > mergeRangeSqr) continue;
 
                 if (Network == null && node.Network == null)
                 {

@@ -83,26 +83,50 @@ namespace Automatics.AutomaticMapping
 
         public static Minimap.PinType GetPinType(Target target)
         {
-            if (!Icons.Any()) return Minimap.PinType.Icon3;
+            if (Icons.Count == 0) return Minimap.PinType.Icon3;
 
             var internalName = target.name;
             var displayName = Automatics.L10N.TranslateInternalName(internalName);
             var prefabName = target.prefabName;
             var meta = target.metadata;
-            return (from x in Icons
-                    let data = x.Target
-                    where (string.IsNullOrEmpty(data.name) ||
-                           (L10N.IsInternalName(data.name)
-                               ? IsNameMatch(internalName, data.name, true)
-                               : IsNameMatch(displayName, data.name, false))) &&
-                          (string.IsNullOrEmpty(data.prefabName) ||
-                           IsNameMatch(prefabName, data.prefabName, true)) &&
-                          (data.metadata == null || IsMetaDataEquals(data.metadata, meta))
-                    orderby data.metadata != null descending,
-                        data.metadata
-                    select GetPinType(x))
-                .DefaultIfEmpty(Minimap.PinType.Icon3)
-                .FirstOrDefault();
+
+            // Plain loop tracking the best match by the same precedence the old
+            // orderby encoded (metadata-bearing before metadata-null; among
+            // metadata-bearing, lowest level via MetaData.CompareTo; first-in-list
+            // wins on ties), without the per-call closure/iterator/OrderBy buffer.
+            Icon best = null;
+            for (var i = 0; i < Icons.Count; i++)
+            {
+                var data = Icons[i].Target;
+
+                var nameMatch = string.IsNullOrEmpty(data.name) ||
+                                (L10N.IsInternalName(data.name)
+                                    ? IsNameMatch(internalName, data.name, true)
+                                    : IsNameMatch(displayName, data.name, false));
+                if (!nameMatch) continue;
+
+                if (!(string.IsNullOrEmpty(data.prefabName) ||
+                      IsNameMatch(prefabName, data.prefabName, true)))
+                    continue;
+
+                if (!(data.metadata == null || IsMetaDataEquals(data.metadata, meta)))
+                    continue;
+
+                if (best == null)
+                {
+                    best = Icons[i];
+                    continue;
+                }
+
+                var bestMeta = best.Target.metadata;
+                var curMeta = data.metadata;
+                if (curMeta != null && bestMeta == null)
+                    best = Icons[i];
+                else if (curMeta != null && bestMeta != null && curMeta.CompareTo(bestMeta) < 0)
+                    best = Icons[i];
+            }
+
+            return best == null ? Minimap.PinType.Icon3 : GetPinType(best);
         }
 
         private static Minimap.PinType GetPinType(Icon icon)

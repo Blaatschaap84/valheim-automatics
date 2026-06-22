@@ -460,12 +460,6 @@ namespace Automatics.AutomaticMapping
                 entry.LastSeenSweep = _currentSweepId;
         }
 
-        private static void MarkSeen(IEnumerable<FloraNode> nodes)
-        {
-            foreach (var node in nodes)
-                MarkSeen(new MapPinIdentify(node.UniqueId));
-        }
-
         /// <summary>
         /// A-12 primary path. Runs a single OverlapSphere scan, builds the
         /// result in a pending cache, and only swaps it into StaticObjectCache
@@ -1300,18 +1294,21 @@ namespace Automatics.AutomaticMapping
             if (!Objects.GetZdoid(component, out var uniqueId)) return true;
             var identify = new MapPinIdentify(uniqueId);
 
+            // Short-circuit cached minerals before the MineRock5 health-package
+            // decode in TryGetMineralPosition and the GetName rename, neither of
+            // which the cached branch uses.
+            if (TryGetCachedPin(identify, out _))
+            {
+                MarkSeen(identify);
+                return true;
+            }
+
             if (ValheimObject.Mineral.GetName(data.Identifier, out var label))
                 name = label;
 
             Vector3 pos;
             float maxHeight;
             if (!TryGetMineralPosition(component, out pos, out maxHeight)) return true;
-
-            if (TryGetCachedPin(identify, out _))
-            {
-                MarkSeen(identify);
-                return true;
-            }
 
             if (Map.GetClosestPin(pos,
                     includeInactive: Config.HideUnexploredAutomaticMappingPins) != null)
@@ -1321,8 +1318,15 @@ namespace Automatics.AutomaticMapping
                 if (maxHeight < ZoneSystem.instance.GetGroundHeight(pos))
                 {
                     var items = Player.m_localPlayer.GetInventory().GetEquippedItems();
-                    if (items.Select(x => x.m_shared.m_name).All(x => x != "$item_wishbone"))
-                        return true;
+                    var hasWishbone = false;
+                    for (var i = 0; i < items.Count; i++)
+                        if (items[i].m_shared.m_name == "$item_wishbone")
+                        {
+                            hasWishbone = true;
+                            break;
+                        }
+
+                    if (!hasWishbone) return true;
                 }
 
             AddPin(uniqueId, pos, name, CreateTarget(component.gameObject, name), PinKind.Mineral,
@@ -1654,7 +1658,7 @@ namespace Automatics.AutomaticMapping
             return false;
         }
 
-        private static bool TryGetCachedPin(IEnumerable<FloraNode> nodes,
+        private static bool TryGetCachedPin(List<FloraNode> nodes,
             out Minimap.PinData pinData)
         {
             foreach (var node in nodes)
@@ -1690,7 +1694,7 @@ namespace Automatics.AutomaticMapping
             return RemoveOwnedPin(identify);
         }
 
-        private static void CachePin(IEnumerable<FloraNode> nodes, Minimap.PinData pinData,
+        private static void CachePin(List<FloraNode> nodes, Minimap.PinData pinData,
             PinKind kind, string identifier, string sourceToken, PinSourceDomain domain)
         {
             foreach (var node in nodes)

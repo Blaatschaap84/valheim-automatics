@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using Automatics.Valheim;
+using HarmonyLib;
 using JetBrains.Annotations;
 using ModUtils;
 using Splatform;
@@ -100,6 +101,12 @@ namespace Automatics.AutomaticMapping
         // edits do not invalidate character caches and vice versa.
         private static int _dynamicClassifierVersion;
         private static bool _registrySubscriptionsBound;
+
+        // Vagon.m_instances resolved once into a cached static-field ref so the
+        // 10 Hz vehicle scan does not allocate a Traverse per call. Guarded bind
+        // falls back to reflection if the field is renamed (mirrors Map._pinsRef).
+        private static AccessTools.FieldRef<List<Vagon>> _vagonInstancesRef;
+        private static bool _vagonInstancesRefBound;
 
         static DynamicObjectMapping()
         {
@@ -513,7 +520,27 @@ namespace Automatics.AutomaticMapping
             for (var i = 0; i < ShipBuffer.Count; i++)
                 VehicleBuffer.Add(ShipBuffer[i]);
 
-            var wagons = Reflections.GetStaticField<Vagon, List<Vagon>>("m_instances");
+            if (!_vagonInstancesRefBound)
+            {
+                _vagonInstancesRefBound = true;
+                try
+                {
+                    var field = AccessTools.Field(typeof(Vagon), "m_instances");
+                    _vagonInstancesRef = field != null
+                        ? AccessTools.StaticFieldRefAccess<List<Vagon>>(field)
+                        : null;
+                }
+                catch (Exception e)
+                {
+                    Automatics.Logger.Warning(() =>
+                        $"Failed to bind Vagon.m_instances field ref; falling back to reflection: {e.Message}");
+                    _vagonInstancesRef = null;
+                }
+            }
+
+            var wagons = _vagonInstancesRef != null
+                ? _vagonInstancesRef()
+                : Reflections.GetStaticField<Vagon, List<Vagon>>("m_instances");
             if (wagons != null)
                 for (var i = 0; i < wagons.Count; i++)
                     VehicleBuffer.Add(wagons[i]);
@@ -759,21 +786,20 @@ namespace Automatics.AutomaticMapping
             if (!KnownObjects.Add(uniqueId)) return;
 
             var pos = component.transform.position;
-            string pinName;
-            if (component is RandomFlyingBird bird)
-            {
-                var birdName = Objects.GetPrefabName(bird.gameObject).ToLower();
-                pinName = $"@animal_{birdName}";
-            }
-            else
-            {
-                pinName = Objects.GetName(component);
-            }
-
+            // Build the pin name only on the add path: the steady-state update path
+            // discards it (UpdatePin keeps pinData.m_name), so building it every
+            // 10 Hz scan wasted ~3-4 string allocations per in-range object.
             if (!PinDataCache.TryGetValue(uniqueId, out var pinData))
+            {
+                var pinName = component is RandomFlyingBird bird
+                    ? $"@animal_{Objects.GetPrefabName(bird.gameObject).ToLower()}"
+                    : Objects.GetName(component);
                 AddPin(uniqueId, pos, pinName, CreateTarget(component.gameObject, pinName));
+            }
             else
+            {
                 UpdatePin(uniqueId, pinData, pinData.m_name, pos, delta);
+            }
         }
 
         private static void AddPin(ZDOID uniqueId, Vector3 pos, string pinName, Target target)

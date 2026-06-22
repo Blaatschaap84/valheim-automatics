@@ -258,9 +258,14 @@ namespace Automatics.AutomaticMapping
 
         public static bool ShouldHideAutomaticPin(Minimap.PinData pinData)
         {
+            // Cheap feature gate first: with unexplored-pin hiding disabled (the
+            // default) this collapses to bool reads, skipping the per-pin hash
+            // lookups in IsAutomaticPin and the IsExplored map call. Inlines
+            // ShouldFilterAutomaticPinAt (ShouldFilterAutomaticPins && !IsExplored).
             return pinData != null &&
+                   ShouldFilterAutomaticPins() &&
                    IsAutomaticPin(pinData) &&
-                   ShouldFilterAutomaticPinAt(pinData.m_pos);
+                   !IsExplored(pinData.m_pos);
         }
 
         public static void DestroyHiddenAutomaticPinMarkers()
