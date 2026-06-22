@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using HarmonyLib;
 using ModUtils;
 using UnityEngine;
 
@@ -20,6 +21,14 @@ namespace Automatics.AutomaticDoor
         private static readonly Lazy<int> LazyPieceMask;
         private static readonly IList<AutomaticDoor> AllInstance;
 
+        // Hot-path (10 Hz, per door, per player) Door members resolved once into
+        // cached delegates/field-refs instead of allocating a Traverse wrapper +
+        // params object[] on every call. Each bind is guarded so a future Valheim
+        // rename only disables that one accessor and falls back to Reflections.
+        private static readonly Action<Door, Vector3> OpenInvoker;
+        private static readonly Func<Door, bool> CanInteractInvoker;
+        private static readonly AccessTools.FieldRef<Character, Collider> ColliderRef;
+
         private static int PieceMask => LazyPieceMask.Value;
 
         private Door _door;
@@ -37,6 +46,46 @@ namespace Automatics.AutomaticDoor
                 LayerMask.GetMask("Default", "static_solid", "Default_small", "piece",
                     "piece_nonsolid", "terrain", "vehicle"));
             AllInstance = new List<AutomaticDoor>();
+
+            OpenInvoker = BindMethod<Action<Door, Vector3>>(
+                typeof(Door), "Open", new[] { typeof(Vector3) });
+            CanInteractInvoker = BindMethod<Func<Door, bool>>(
+                typeof(Door), "CanInteract", Type.EmptyTypes);
+            ColliderRef = BindColliderRef();
+        }
+
+        private static TDelegate BindMethod<TDelegate>(Type type, string name,
+            Type[] parameters) where TDelegate : Delegate
+        {
+            try
+            {
+                var method = AccessTools.Method(type, name, parameters);
+                if (method != null) return AccessTools.MethodDelegate<TDelegate>(method);
+
+                Automatics.Logger.Warning(() =>
+                    $"{type.Name}.{name} not found; falling back to reflection.");
+            }
+            catch (Exception e)
+            {
+                Automatics.Logger.Warning(() =>
+                    $"Failed to bind {type.Name}.{name} delegate; falling back to reflection: {e.Message}");
+            }
+
+            return null;
+        }
+
+        private static AccessTools.FieldRef<Character, Collider> BindColliderRef()
+        {
+            try
+            {
+                return AccessTools.FieldRefAccess<Character, Collider>("m_collider");
+            }
+            catch (Exception e)
+            {
+                Automatics.Logger.Warning(() =>
+                    $"Failed to bind Character.m_collider field ref; falling back to reflection: {e.Message}");
+                return null;
+            }
         }
 
         private void Awake()
@@ -129,12 +178,17 @@ namespace Automatics.AutomaticDoor
         {
             if (!IsValid()) return;
             if (!IsAllowAutomaticDoor()) return;
-            if (IsDoorOpen() || !CanInteract(player)) return;
-            if (!CanOpen(player)) return;
+            if (IsDoorOpen()) return;
 
+            // Reject on the cheap squared-distance test before the reflective
+            // CanInteract/CanOpen gates, so reflection never runs for doors the
+            // player is too far from.
             var playerPosition = player.transform.position;
             var doorPosition = _transform.position;
             if ((doorPosition - playerPosition).sqrMagnitude > searchRangeSquared) return;
+
+            if (!CanInteract(player)) return;
+            if (!CanOpen(player)) return;
             if (!ShouldOpen(playerPosition, velocity, openRange)) return;
             if (IsExistsObstaclesBetweenTo(player)) return;
 
@@ -143,7 +197,7 @@ namespace Automatics.AutomaticDoor
                     Localization.instance.Localize("$msg_door_usingkey",
                         _door.m_keyItem.m_itemData.m_shared.m_name));
 
-            Reflections.InvokeMethod(_door, "Open", (playerPosition - doorPosition).normalized);
+            OpenDoor((playerPosition - doorPosition).normalized);
             _lastAutomaticOpenTime = Time.time;
         }
 
@@ -184,8 +238,15 @@ namespace Automatics.AutomaticDoor
 
             if (!closestInteractablePlayer) return;
 
-            Reflections.InvokeMethod(_door, "Open",
-                (closestInteractablePlayer.transform.position - doorPosition).normalized);
+            OpenDoor((closestInteractablePlayer.transform.position - doorPosition).normalized);
+        }
+
+        private void OpenDoor(Vector3 direction)
+        {
+            if (OpenInvoker != null)
+                OpenInvoker(_door, direction);
+            else
+                Reflections.InvokeMethod(_door, "Open", direction);
         }
 
         private bool IsAllowAutomaticDoor()
@@ -211,7 +272,9 @@ namespace Automatics.AutomaticDoor
         {
             if (_door.m_checkGuardStone && !CheckWardAccess(player, _transform.position))
                 return false;
-            return Reflections.InvokeMethod<bool>(_door, "CanInteract");
+            return CanInteractInvoker != null
+                ? CanInteractInvoker(_door)
+                : Reflections.InvokeMethod<bool>(_door, "CanInteract");
         }
 
         private static bool CheckWardAccess(Player player, Vector3 point)
@@ -221,19 +284,21 @@ namespace Automatics.AutomaticDoor
             var areas = Reflections.GetStaticField<PrivateArea, List<PrivateArea>>(PrivateAreaAllAreasField);
             if (areas == null) return false;
 
-            var allowed = false;
-            var foundBlockedArea = false;
+            // Match vanilla PrivateArea.CheckAccess: deny on the first enabled,
+            // in-range ward the player lacks access to. The previous
+            // "allowed || !foundBlockedArea" rule let permission in one
+            // overlapping ward override a block from another, auto-opening a
+            // guard-stoned door where vanilla rules forbid interaction.
+            // IsInside (a cheap XZ distance test) runs before IsEnabled (a
+            // reflective field read + ZDO lookup) so the reflection is skipped
+            // for out-of-range wards.
             foreach (var area in areas)
             {
-                if (!IsEnabled(area) || !IsInside(area, point, 0f)) continue;
-
-                if (HasPlayerAccess(area, player))
-                    allowed = true;
-                else
-                    foundBlockedArea = true;
+                if (!area || !IsInside(area, point, 0f) || !IsEnabled(area)) continue;
+                if (!HasPlayerAccess(area, player)) return false;
             }
 
-            return allowed || !foundBlockedArea;
+            return true;
         }
 
         private static bool IsEnabled(PrivateArea area)
@@ -301,7 +366,9 @@ namespace Automatics.AutomaticDoor
         {
             // Unity's lifetime check (implicit bool), not `?.`: a destroyed Collider
             // is non-null to C# but throws on .bounds.
-            var collider = Reflections.GetField<Collider>(player, "m_collider");
+            var collider = ColliderRef != null
+                ? ColliderRef(player)
+                : Reflections.GetField<Collider>(player, "m_collider");
             var from = collider ? collider.bounds.center : player.m_eye.position;
             var to = _transform.position;
 
