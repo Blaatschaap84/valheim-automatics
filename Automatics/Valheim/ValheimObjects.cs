@@ -468,8 +468,11 @@ namespace Automatics.Valheim
         public ValheimObject(string type)
         {
             _type = type;
-            _elements = new Dictionary<string, ObjectElement>();
-            _customElements = new Dictionary<string, ObjectElement>();
+            // Case-insensitive keys so GetName/HasTag and insertion need no per-call
+            // ToLowerInvariant allocation on the hot farming-scan path.
+            _elements = new Dictionary<string, ObjectElement>(StringComparer.OrdinalIgnoreCase);
+            _customElements =
+                new Dictionary<string, ObjectElement>(StringComparer.OrdinalIgnoreCase);
             _allElements = new List<ObjectElement>();
 
             if (JsonCache.Any())
@@ -579,7 +582,7 @@ namespace Automatics.Valheim
         {
             foreach (var element in jsons.Where(x => x.type.ToLowerInvariant() == _type)
                          .OrderBy(x => x.order).SelectMany(x => x.values))
-                _elements[element.identifier.ToLowerInvariant()] = CloneElement(element);
+                _elements[element.identifier] = CloneElement(element);
             ReportDuplicateExactMatchers();
             UpdateElements();
         }
@@ -601,7 +604,7 @@ namespace Automatics.Valheim
                     continue;
                 }
 
-                _customElements[element.identifier.ToLowerInvariant()] = CloneElement(element);
+                _customElements[element.identifier] = CloneElement(element);
             }
 
             UpdateElements();
@@ -652,9 +655,8 @@ namespace Automatics.Valheim
 
         public bool GetName(string identifier, out string name)
         {
-            var key = identifier.ToLowerInvariant();
-            if (!_elements.TryGetValue(key, out var element) &&
-                !_customElements.TryGetValue(key, out element))
+            if (!_elements.TryGetValue(identifier, out var element) &&
+                !_customElements.TryGetValue(identifier, out element))
             {
                 name = "";
                 return false;
@@ -677,9 +679,8 @@ namespace Automatics.Valheim
         /// </summary>
         public bool HasTag(string identifier, string tag)
         {
-            var key = identifier.ToLowerInvariant();
-            if (!_elements.TryGetValue(key, out var element) &&
-                !_customElements.TryGetValue(key, out element))
+            if (!_elements.TryGetValue(identifier, out var element) &&
+                !_customElements.TryGetValue(identifier, out element))
                 return false;
 
             return element.tags != null && element.tags.Contains(tag);
