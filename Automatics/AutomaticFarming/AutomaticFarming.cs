@@ -36,11 +36,33 @@ namespace Automatics.AutomaticFarming
         /// </summary>
         public static bool ClaimsCrop(Pickable pickable)
         {
+            return ClaimsCrop(Player.m_localPlayer, pickable);
+        }
+
+        public static bool ClaimsCrop(Player player, Pickable pickable)
+        {
             if (!pickable) return false;
             if (Config.ModuleDisabled) return false;
             if (!Config.EnableAutomaticFarming) return false;
 
-            return TryGetCropIdentifier(pickable, out _);
+            if (!TryGetCropIdentifier(pickable, out var identifier)) return false;
+            if (Config.SeedSource == SeedSource.Inventory) return true;
+            if (player == null) return false;
+
+            var containers = FarmingContainers.Resolve(player);
+            if (!containers.HasAnchors) return false;
+            if (containers.OwnedStorage.Count == 0 &&
+                containers.OwnedCultivation.Count == 0 &&
+                containers.OwnedSeedHarvest.Count == 0)
+                return false;
+
+            var position = pickable.transform.position;
+            var range = Config.FarmingRange;
+            if (!TryNearestAnchorDistance(containers, position, range, out _)) return false;
+
+            var isSeed = ValheimObject.Flora.HasTag(identifier, "seed");
+            return containers.StorageNear(position, range).Count > 0 ||
+                   containers.MatchingPlantingNear(isSeed, position, range).Count > 0;
         }
 
         // ---- Inventory mode (player-centric, unchanged behavior) ----------------
@@ -106,7 +128,7 @@ namespace Automatics.AutomaticFarming
 
         private static void FarmAroundContainers(Player player)
         {
-            var containers = FarmingContainers.Resolve(player);
+            var containers = FarmingContainers.Resolve(player, prepareMutation: true);
             if (!containers.HasAnchors) return;
 
             HarvestAndReplantNearContainers(player, containers);

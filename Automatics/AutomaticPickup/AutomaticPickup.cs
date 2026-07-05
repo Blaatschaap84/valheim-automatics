@@ -16,6 +16,7 @@ namespace Automatics.AutomaticPickup
         private static readonly List<Pickable> PickableBuffer = new List<Pickable>();
         private static readonly List<PickableItem> PickableItemBuffer =
             new List<PickableItem>();
+        private static readonly List<ItemDrop> ItemDropBuffer = new List<ItemDrop>();
         private static readonly List<ItemDrop> EmptyItemDrops = new List<ItemDrop>();
 
         private readonly WaitForSeconds _idleWait = new WaitForSeconds(0.1f);
@@ -48,7 +49,7 @@ namespace Automatics.AutomaticPickup
                 if (Config.PickupAllNearbyKey.MainKey == KeyCode.None)
                 {
                     PickupAllNearby(_player,
-                        (Pickable x) => !AutomaticFarming.AutomaticFarming.ClaimsCrop(x));
+                        (Pickable x) => !AutomaticFarming.AutomaticFarming.ClaimsCrop(_player, x));
                     yield return null;
                     PickupAllNearby(_player, (PickableItem x) => true);
                     yield return null;
@@ -215,13 +216,14 @@ namespace Automatics.AutomaticPickup
 
             var range = Config.AutomaticPickupRange;
             var rangeSq = range * range;
-            // Indexed loop over the game's live ItemDrop list: ItemDrop.Pickup can
-            // remove an entry mid-iteration, which would make a foreach enumerator
-            // throw (collection modified) and abort the whole pass.
-            var itemDrops = GetAllItemDrop();
-            for (var i = 0; i < itemDrops.Count; i++)
+            // Snapshot the game's live ItemDrop list: ItemDrop.Pickup can remove
+            // entries mid-pass, and forward-indexing the live list would skip the
+            // item that shifts into the removed slot.
+            ItemDropBuffer.Clear();
+            ItemDropBuffer.AddRange(GetAllItemDrop());
+            for (var i = 0; i < ItemDropBuffer.Count; i++)
             {
-                var itemDrop = itemDrops[i];
+                var itemDrop = ItemDropBuffer[i];
                 if (!itemDrop) continue;
                 if (itemDrop.IsPiece()) continue;
                 if ((origin - itemDrop.transform.position).sqrMagnitude > rangeSq) continue;
