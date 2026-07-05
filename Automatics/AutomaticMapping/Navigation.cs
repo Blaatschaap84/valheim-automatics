@@ -56,6 +56,11 @@ namespace Automatics.AutomaticMapping
                 ClearTarget(false);
         }
 
+        public static void ClearTarget()
+        {
+            ClearTarget(false);
+        }
+
         public static bool TryHandleMapClick(Minimap map)
         {
             if (!map) return false;

@@ -184,7 +184,7 @@ namespace Automatics.AutomaticMapping
             {
                 if (!Config.EnableAutomaticMapping) return;
                 if (!Config.RemovePinsOfDestroyedObject) return;
-                if (zNetView == null || !zNetView.IsValid() || !zNetView.IsOwner()) return;
+                if (zNetView == null || !zNetView.IsValid()) return;
                 if (!Objects.GetZdoid(component, out var uniqueId)) return;
 
                 var identify = new MapPinIdentify(uniqueId);
@@ -1189,7 +1189,7 @@ namespace Automatics.AutomaticMapping
 
             var pos = network.Center;
             if (Map.GetClosestPin(pos,
-                    includeInactive: Config.HideUnexploredAutomaticMappingPins) != null)
+                    includeInactive: true) != null)
                 return true;
 
             var pinName = ComputeFloraPinName(displayName, network.NodeCount);
@@ -1266,7 +1266,7 @@ namespace Automatics.AutomaticMapping
                     PinSourceDomain.Component);
             }
             else if (Map.GetClosestPin(center,
-                         includeInactive: Config.HideUnexploredAutomaticMappingPins) == null)
+                         includeInactive: true) == null)
             {
                 var newPin = AddStaticPin(center, pinName, Config.SaveStaticObjectPins,
                     CreateTarget(component.gameObject, displayName));
@@ -1311,7 +1311,7 @@ namespace Automatics.AutomaticMapping
             if (!TryGetMineralPosition(component, out pos, out maxHeight)) return true;
 
             if (Map.GetClosestPin(pos,
-                    includeInactive: Config.HideUnexploredAutomaticMappingPins) != null)
+                    includeInactive: true) != null)
                 return true;
 
             if (Config.NeedToEquipWishboneForUndergroundMinerals)
@@ -1438,7 +1438,7 @@ namespace Automatics.AutomaticMapping
 
             var position = component.transform.position;
             if (Map.GetClosestPin(position,
-                    includeInactive: Config.HideUnexploredAutomaticMappingPins) == null)
+                    includeInactive: true) == null)
                 AddPin(uniqueId, position, name, CreateTarget(component.gameObject, name),
                     PinKind.Spawner, data.Identifier, sourceToken, PinSourceDomain.Component);
 
@@ -1463,7 +1463,7 @@ namespace Automatics.AutomaticMapping
 
             var position = component.transform.position;
             if (Map.GetClosestPin(position,
-                    includeInactive: Config.HideUnexploredAutomaticMappingPins) == null)
+                    includeInactive: true) == null)
                 AddPin(uniqueId, position, name, CreateTarget(component.gameObject, name),
                     PinKind.Other, data.Identifier, sourceToken, PinSourceDomain.Component);
 
@@ -1560,7 +1560,7 @@ namespace Automatics.AutomaticMapping
                 }
 
                 if (Map.GetClosestPin(entrance,
-                        includeInactive: Config.HideUnexploredAutomaticMappingPins) == null)
+                        includeInactive: true) == null)
                     AddPin(ZDOID.None, entrance, name, CreateTarget(prefabName, name),
                         PinKind.Dungeon, data.Identifier, prefabName, PinSourceDomain.Location);
 
@@ -1575,7 +1575,7 @@ namespace Automatics.AutomaticMapping
             }
 
             if (Map.GetClosestPin(pos, radius, x => x.m_name == name,
-                    includeInactive: Config.HideUnexploredAutomaticMappingPins) == null)
+                    includeInactive: true) == null)
             {
                 AddPin(ZDOID.None, pos, name, CreateTarget(prefabName, name), PinKind.Dungeon,
                     data.Identifier, prefabName, PinSourceDomain.Location);
@@ -1603,7 +1603,7 @@ namespace Automatics.AutomaticMapping
                 name = $"@location_{prefabName.ToLower()}";
 
             if (Map.GetClosestPin(pos,
-                    includeInactive: Config.HideUnexploredAutomaticMappingPins) == null)
+                    includeInactive: true) == null)
                 AddPin(ZDOID.None, pos, name, CreateTarget(prefabName, name), PinKind.Spot,
                     data.Identifier, prefabName, PinSourceDomain.Location);
 
@@ -1778,38 +1778,70 @@ namespace Automatics.AutomaticMapping
 
         public struct MapPinIdentify : IEquatable<MapPinIdentify>
         {
+            private enum IdentifyKind : byte
+            {
+                None,
+                UniqueId,
+                Position
+            }
+
+            // Location-domain pins are minimap-horizontal identities. Keep a rounded
+            // X/Z key so a valid origin position is representable and small Y drift
+            // between LocationInstance and spawned Location transforms cannot split
+            // one location into multiple cache keys.
+            private const float PositionKeyScale = 10f;
+
+            private readonly IdentifyKind _kind;
+            private readonly int _posXKey;
+            private readonly int _posZKey;
+
             public readonly ZDOID UniqueId;
             public readonly Vector3 Pos;
 
-            private MapPinIdentify(ZDOID uniqueId, Vector3 pos)
+            private MapPinIdentify(IdentifyKind kind, ZDOID uniqueId, Vector3 pos)
             {
+                _kind = kind;
                 UniqueId = uniqueId;
                 Pos = pos;
+                _posXKey = ToPositionKey(pos.x);
+                _posZKey = ToPositionKey(pos.z);
             }
 
-            public MapPinIdentify(ZDOID uniqueId) : this(uniqueId, Vector3.zero)
+            public MapPinIdentify(ZDOID uniqueId) : this(IdentifyKind.UniqueId, uniqueId,
+                Vector3.zero)
             {
             }
 
-            public MapPinIdentify(Vector3 pos) : this(ZDOID.None, pos)
+            public MapPinIdentify(Vector3 pos) : this(IdentifyKind.Position, ZDOID.None, pos)
             {
             }
 
             public bool IsUniqueId()
             {
-                return UniqueId.UserID != 0 && UniqueId.ID != 0;
+                return _kind == IdentifyKind.UniqueId &&
+                       UniqueId.UserID != 0 &&
+                       UniqueId.ID != 0;
             }
 
             public bool IsPos()
             {
-                return Pos != Vector3.zero;
+                return _kind == IdentifyKind.Position;
             }
 
             public override int GetHashCode()
             {
                 unchecked
                 {
-                    return (UniqueId.GetHashCode() * 397) ^ Pos.GetHashCode();
+                    var hash = (int)_kind;
+                    if (IsUniqueId())
+                        hash = (hash * 397) ^ UniqueId.GetHashCode();
+                    else if (IsPos())
+                    {
+                        hash = (hash * 397) ^ _posXKey;
+                        hash = (hash * 397) ^ _posZKey;
+                    }
+
+                    return hash;
                 }
             }
 
@@ -1820,7 +1852,8 @@ namespace Automatics.AutomaticMapping
 
             public bool PosEquals(Vector3 pos)
             {
-                return Pos == pos;
+                return _posXKey == ToPositionKey(pos.x) &&
+                       _posZKey == ToPositionKey(pos.z);
             }
 
             public bool Equals(MapPinIdentify other)
@@ -1828,6 +1861,11 @@ namespace Automatics.AutomaticMapping
                 if (IsUniqueId() && other.IsUniqueId()) return UniqueIdEquals(other.UniqueId);
                 if (IsPos() && other.IsPos()) return PosEquals(other.Pos);
                 return false;
+            }
+
+            private static int ToPositionKey(float value)
+            {
+                return Mathf.RoundToInt(value * PositionKeyScale);
             }
         }
     }

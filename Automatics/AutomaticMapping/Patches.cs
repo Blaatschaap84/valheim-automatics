@@ -345,6 +345,7 @@ namespace Automatics.AutomaticMapping
             // that permanently suppresses re-pinning for the rest of the session.
             DynamicObjectMapping.Cleanup();
             StaticObjectMapping.Cleanup();
+            Navigation.ClearTarget();
         }
 
         // Clears PinIndex on world unload. Without this, the index keeps
