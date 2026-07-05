@@ -24,6 +24,11 @@ namespace Automatics.SmokeTest
 
         private IEnumerator Start()
         {
+            // Register the optional in-game world smoke command before the readiness
+            // wait so the Hooks.OnInitTerminal subscription is in place before the
+            // terminal's one-time init fires (mirrors how Automatics itself registers).
+            WorldSmokeCommand.EnsureRegistered();
+
             // Only Localization.instance is consumed by a check (and that check
             // skip-guards on it), so the readiness wait covers just that. The object
             // registries under test are populated synchronously during the Automatics

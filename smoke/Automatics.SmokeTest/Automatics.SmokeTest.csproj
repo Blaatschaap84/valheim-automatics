@@ -70,6 +70,7 @@
 
   <ItemGroup>
     <Compile Include="SmokePlugin.cs" />
+    <Compile Include="WorldSmokeCommand.cs" />
   </ItemGroup>
 
   <ItemGroup Label="BepInEx">
@@ -107,6 +108,11 @@
     <Reference Include="assembly_valheim">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>$(ManagedDataDirectory)\assembly_valheim.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="assembly_utils">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>$(ManagedDataDirectory)\assembly_utils.dll</HintPath>
       <Private>False</Private>
     </Reference>
   </ItemGroup>

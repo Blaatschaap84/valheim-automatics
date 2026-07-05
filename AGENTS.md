@@ -56,6 +56,8 @@ scripts/build.sh Debug
 scripts/build.sh smoke Debug [clean] [deploy|no-deploy]
 ```
 
+Besides the auto-run startup invariant checks, the smoke plugin registers an optional in-game `automatics_smoke_world` console command that drives the live Storage/Door/Pickup/Processing entry points against freshly spawned objects.
+
 Version consistency check:
 
 ```bash

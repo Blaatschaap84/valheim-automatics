@@ -92,6 +92,32 @@ the main menu before a world loads. The smoke checks create temporary object JSO
 files only under `BepInEx/config/AutomaticsSmoke/` and clean them up on a
 best-effort basis.
 
+### World smoke command
+
+In addition to the automatic startup checks above, the plugin registers an
+optional console command `automatics_smoke_world` (no arguments). Run it from the
+in-game console while a single-player world is loaded. It spawns real objects
+(chest, wood door, smelter, item drop) next to the player and drives the live
+Automatics entry points for Storage, Door, Pickup, and Processing, then asserts
+the observable result of each:
+
+- `world_storage_store_moves_items` — `AutomaticStorage.Store` moves test Wood
+  from the player into a spawned chest.
+- `world_door_open_sets_zdo_state` — `AutomaticDoor.TryOpenNearby` flips the
+  spawned door's ZDO `state` to non-zero.
+- `world_pickup_itemdrop_to_inventory` — the shared pickup gate plus
+  `ItemDrop.Pickup` moves a spawned drop into the inventory.
+- `world_processing_smelter_refuel` — `SmelterProcess.QuickRefuel` raises the
+  smelter's ZDO `fuel` by one and consumes fuel from a nearby chest.
+
+Each check logs a `PASS`/`FAIL`/`SKIP` line plus a `[Automatics Smoke] Summary:
+total=4 ...` line to both the BepInEx log and the in-game console (out of scope:
+Farming, Feeding, Mining). Checks SKIP (never FAIL) when run at the main menu,
+when a module is disabled, or when a required config flag is off; the command
+never mutates config and always cleans up the spawned objects and test items. The
+processing container cache is reset both before the refuel call and again during
+teardown, so running the command back-to-back is safe.
+
 ## Remove
 
 To uninstall the smoke plugin, remove the dedicated deploy directory:
