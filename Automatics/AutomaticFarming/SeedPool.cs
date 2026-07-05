@@ -107,8 +107,7 @@ namespace Automatics.AutomaticFarming
         // so a ward raised or access revoked since selection is also honored.
         private int RemoveFromContainer(Container container, string name, int amount)
         {
-            if (!ContainerAccess.CanDirectlyMutateContainer(_player, container)) return 0;
-            if (!ContainerAccess.TryPrepareOwnedContainerMutation(container)) return 0;
+            if (!ContainerAccess.TryPrepareContainerMutation(_player, container)) return 0;
             return RemoveFromInventory(container.GetInventory(), name, amount);
         }
 

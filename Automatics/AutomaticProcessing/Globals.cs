@@ -76,15 +76,16 @@ namespace Automatics.AutomaticProcessing
         }
 
         // Container.OnContainerChanged only saves to the ZDO when the local
-        // peer owns the ZNetView, so on dedicated servers and non-host clients
-        // a mutation of the local mirror is silently dropped and reverted on
-        // the next Container.Load. Claim ownership immediately before mutating
-        // so the change is persisted. Returns false when the container or its
-        // ZNetView became invalid between selection and claim — in that case
-        // the caller must skip the mutation.
+        // peer owns the ZNetView, so claim ownership immediately before mutating.
+        // Processing runs owner-side, which includes dedicated servers where
+        // there is no local player, so the mutation gate is server-aware: with a
+        // local player it enforces the full player access rules (ward,
+        // private/group, in-use, wagon), and without one it falls back to the
+        // owner-only claim path so server-side processing keeps working.
         public static bool TryClaimContainer(Container container)
         {
-            return ContainerAccess.TryClaimContainer(container);
+            return ContainerAccess.TryPrepareContainerMutationServerAware(
+                Player.m_localPlayer, container);
         }
 
         public static bool TryRemoveItem(Inventory inventory, string itemName, int minCount,
@@ -157,10 +158,13 @@ namespace Automatics.AutomaticProcessing
             var containers = new ContainerList();
             Containers[cacheKey] = containers;
 
+            var player = Player.m_localPlayer;
             if (range > 0)
                 containers.AddRange((from x in ContainerCache.GetAllInstance()
                     let distance = Vector3.Distance(origin, x.transform.position)
-                    where distance <= range && IsAllowContainer(x)
+                    where distance <= range &&
+                          IsAllowContainer(x) &&
+                          (player == null || ContainerAccess.CanUseContainer(player, x))
                     orderby distance
                     select (x, distance)).Take(limit > 0 ? limit : int.MaxValue));
 

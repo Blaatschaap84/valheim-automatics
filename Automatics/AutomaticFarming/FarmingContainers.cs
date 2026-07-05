@@ -67,7 +67,7 @@ namespace Automatics.AutomaticFarming
 
         public bool HasAnchors => Anchors.Count > 0;
 
-        public static FarmingContainers Resolve(Player player)
+        public static FarmingContainers Resolve(Player player, bool prepareMutation = false)
         {
             var ownedCultivation = new List<DesignatedContainer>();
             var ownedSeedHarvest = new List<DesignatedContainer>();
@@ -84,7 +84,10 @@ namespace Automatics.AutomaticFarming
                 var position = container.transform.position;
                 anchors.Add(position);
 
-                if (!ContainerAccess.CanDirectlyMutateContainer(player, container)) continue;
+                var canMutate = prepareMutation
+                    ? ContainerAccess.TryPrepareContainerMutation(player, container)
+                    : ContainerAccess.CanUseContainer(player, container);
+                if (!canMutate) continue;
 
                 var designated = new DesignatedContainer(container, position);
                 switch (role)

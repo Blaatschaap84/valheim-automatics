@@ -210,8 +210,7 @@ namespace Automatics.Valheim
         private static int DepositIntoContainer(Player player, Container container, GameObject prefab,
             int amount)
         {
-            if (!ContainerAccess.CanDirectlyMutateContainer(player, container)) return 0;
-            if (!ContainerAccess.TryPrepareOwnedContainerMutation(container)) return 0;
+            if (!ContainerAccess.TryPrepareContainerMutation(player, container)) return 0;
 
             var inventory = container.GetInventory();
             return inventory == null ? 0 : AddItem(inventory, prefab, amount);
@@ -225,8 +224,7 @@ namespace Automatics.Valheim
             GameObject prefab, int amount)
         {
             if (amount <= 0) return 0;
-            if (!ContainerAccess.CanDirectlyMutateContainer(player, container)) return 0;
-            if (!ContainerAccess.TryPrepareOwnedContainerMutation(container)) return 0;
+            if (!ContainerAccess.TryPrepareContainerMutation(player, container)) return 0;
 
             var inventory = container.GetInventory();
             if (inventory == null) return 0;
