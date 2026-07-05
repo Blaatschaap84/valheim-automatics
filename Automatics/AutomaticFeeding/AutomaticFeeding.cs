@@ -99,6 +99,13 @@ namespace Automatics.AutomaticFeeding
 
             var container = target.GetComponentInChildren<Container>();
             if (container == null) return false;
+            // Owner-side feeding also runs on dedicated servers where there is no
+            // local player, so only enforce the player access model when a local
+            // player exists; otherwise fall through to the owner-only mutation
+            // gate at consume time.
+            var localPlayer = Player.m_localPlayer;
+            if (localPlayer != null && !ContainerAccess.CanUseContainer(localPlayer, container))
+                return false;
 
             var inventory = container.GetInventory();
             if (inventory == null) return false;
@@ -127,6 +134,14 @@ namespace Automatics.AutomaticFeeding
                 }
 
                 UpdateFeedInfo();
+            }
+
+            if (!_tamable.IsHungry())
+            {
+                _closestFeedBox = null;
+                _closestFeeder = null;
+                _consumeTargetItem = null;
+                return false;
             }
 
             if (!_closestFeedBox && !_closestFeeder) return false;
@@ -166,8 +181,8 @@ namespace Automatics.AutomaticFeeding
                 // authoritative and needs no extra guard.
                 if (feedBoxFound)
                 {
-                    if (!ContainerAccess.TryClaimContainer(_closestFeedBox)) return true;
-                    if (!ContainerAccess.TryPrepareOwnedContainerMutation(_closestFeedBox))
+                    if (!ContainerAccess.TryPrepareContainerMutationServerAware(
+                            Player.m_localPlayer, _closestFeedBox))
                         return true;
                     // Re-fetch the inventory after taking ownership so the
                     // post-ownership (possibly ZDO-reloaded) instance is mutated.
@@ -233,6 +248,9 @@ namespace Automatics.AutomaticFeeding
 
                 if (distance > range || distance >= closest) continue;
                 if (needGetClose && !HavePath(position)) continue;
+                var localPlayer = Player.m_localPlayer;
+                if (localPlayer != null && !ContainerAccess.CanUseContainer(localPlayer, container))
+                    continue;
 
                 var inventory = container.GetInventory();
                 if (inventory == null) continue;
