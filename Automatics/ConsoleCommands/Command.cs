@@ -14,6 +14,7 @@ namespace Automatics.ConsoleCommands
     {
         private static readonly Dictionary<string, Command> Commands;
         private static readonly List<string> EmptyList;
+        private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(250);
 
         static Command()
         {
@@ -53,9 +54,17 @@ namespace Automatics.ConsoleCommands
             public bool IsMatch(string value)
             {
                 if (value == null) return false;
-                return _regex != null
-                    ? _regex.IsMatch(value)
-                    : value.IndexOf(_value, StringComparison.OrdinalIgnoreCase) >= 0;
+                if (_regex == null)
+                    return value.IndexOf(_value, StringComparison.OrdinalIgnoreCase) >= 0;
+
+                try
+                {
+                    return _regex.IsMatch(value);
+                }
+                catch (RegexMatchTimeoutException)
+                {
+                    return false;
+                }
             }
         }
 
@@ -180,7 +189,7 @@ namespace Automatics.ConsoleCommands
             var pattern = value.Substring(2);
             try
             {
-                filter = new TextFilter(new Regex(pattern));
+                filter = new TextFilter(new Regex(pattern, RegexOptions.None, RegexTimeout));
                 return true;
             }
             catch (ArgumentException e)
