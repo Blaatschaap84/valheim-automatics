@@ -219,10 +219,13 @@ namespace Automatics.AutomaticDoor
                 if (!player) continue;
 
                 var distanceSquared = (player.transform.position - doorPosition).sqrMagnitude;
-                if (distanceSquared <= closeRangeSquared)
+                var canInteract = CanInteract(player);
+                if (distanceSquared <= closeRangeSquared &&
+                    canInteract &&
+                    CanOpen(player) &&
+                    !IsExistsObstaclesBetweenTo(player))
                     return;
 
-                var canInteract = CanInteract(player);
                 if (distanceSquared <= holdOpenRangeSquared &&
                     canInteract &&
                     CanOpen(player) &&
