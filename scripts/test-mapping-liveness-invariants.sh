@@ -165,10 +165,19 @@ require_source_pattern \
   "$static_mapping_file" \
   "!save && Map\\.ShouldSuppressTransientAutomaticPin\\(pos\\)" \
   "unsaved static automatic pins must be suppressed before creation outside explored areas"
+# Static duplicate checks are pin-existence checks, not UI-marker checks: an
+# inactive marker (freshly added and not yet built, or deactivated off-screen by
+# vanilla Minimap.UpdatePins) must still block a second pin so re-scans cannot
+# create duplicates. Dedup therefore always includes inactive pins and must not
+# be gated on the unexplored-pin-hiding config.
 require_source_pattern \
   "$static_mapping_file" \
+  "includeInactive: true" \
+  "static mapping dedup must be pin-existence based (includeInactive: true) so inactive markers cannot spawn duplicate pins"
+reject_source_pattern \
+  "$static_mapping_file" \
   "includeInactive: Config\\.HideUnexploredAutomaticMappingPins" \
-  "static mapping dedup must see hidden automatic pins only when unexplored-pin hiding is enabled"
+  "static mapping dedup must not be gated on unexplored-pin hiding (would recreate duplicate pins for inactive markers)"
 require_source_pattern \
   "$navigation_file" \
   "Map\\.ShouldHideAutomaticPin\\(_targetPin\\)" \
