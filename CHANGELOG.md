@@ -1,3 +1,12 @@
+#### v1.7.0 [2026-07-19]
+- Added Automatic Storage for moving eligible inventory items into nearby containers by hotkey.
+- Added Automatic Farming for harvesting, replanting, sowing, seed reserves, and role-based container workflows.
+- Improved Automatic Mapping performance, cache coherence, navigation, cleanup, and object matching.
+- Improved Automatic Processing performance and container handling, including dedicated-server-safe mutations and storage effects.
+- Improved multiplayer access and ownership handling for doors, feeding, farming, pickup, processing, and containers.
+- Fixed config migration and console command edge cases, including bounded regular-expression matching.
+- Added optional in-game smoke tests for live Storage, Door, Pickup, and Processing workflows.
+
 #### v1.6.0 [2026-05-17]
 - Updated for Valheim 0.221.12 and added automation data for Ashlands, Bog Witch, and Call to Arms content.
 - Added a config migration that appends new default automation targets to existing allow lists.
