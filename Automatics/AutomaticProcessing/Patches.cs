@@ -76,7 +76,10 @@ namespace Automatics.AutomaticProcessing
                     new CodeInstruction(OpCodes.Ldfld,
                         AccessTools.Field(typeof(CookingStation), "m_nview")),
                     new CodeInstruction(OpCodes.Ldloc_2),
-                    new CodeInstruction(OpCodes.Ldloc_S, 6),
+                    // Valheim 1.0 added the `requireVisualUpdate` local to
+                    // CookingStation.UpdateCooking. ItemConversion consequently
+                    // moved from local 6 to local 7.
+                    new CodeInstruction(OpCodes.Ldloc_S, 7),
                     new CodeInstruction(OpCodes.Call,
                         AccessTools.Method(typeof(CookingStationProcess), "Store")),
                     new CodeInstruction(OpCodes.Brtrue_S, label));
@@ -85,9 +88,13 @@ namespace Automatics.AutomaticProcessing
             var matcher = new CodeMatcher(instructions)
                 .MatchEndForward(
                     new CodeMatch(OpCodes.Ldc_I4_2),
+                    new CodeMatch(OpCodes.Ldloc_S),
                     new CodeMatch(OpCodes.Call,
                         AccessTools.Method(typeof(CookingStation), "SetSlot")),
-                    new CodeMatch(OpCodes.Br));
+                    // The SetSlot call gained a requireVisualUpdate argument in
+                    // Valheim 1.0, and the compiler now emits a short branch.
+                    new CodeMatch(instruction => instruction.opcode == OpCodes.Br ||
+                                                 instruction.opcode == OpCodes.Br_S));
 
             var originalCodes = matcher.Operand;
 
