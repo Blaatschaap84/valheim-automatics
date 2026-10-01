@@ -71,6 +71,7 @@ namespace Automatics.AutomaticProcessing
 
             var smelterName = smelter.m_name;
             if (!Logics.IsAllowProcessing(smelterName, Process.Craft)) return ore;
+            var isCharcoalKiln = smelterName == Processor.CharcoalKiln.name;
 
             var minMaterialCount = Config.MaterialCountOfSuppressProcessing(smelterName);
             var maxProductStacks = Config.ProductStacksOfSuppressProcessing(smelterName);
@@ -96,8 +97,10 @@ namespace Automatics.AutomaticProcessing
                     if (materialContainer && productContainerFound) break;
 
                     if (materialContainer == null)
-                        if (Inventories.HaveItem(inventory, materialData.m_name,
-                                0, WorldLevelMatchMode.Ignore, minMaterialCount + 1))
+                        if (isCharcoalKiln
+                            ? Logics.HasAllowedCharcoalKilnWood(inventory, minMaterialCount)
+                            : Inventories.HaveItem(inventory, materialData.m_name, 0,
+                                WorldLevelMatchMode.Ignore, minMaterialCount + 1))
                             materialContainer = container;
 
                     if (maxProductStacks > 0 && !productContainerFound)
@@ -114,8 +117,11 @@ namespace Automatics.AutomaticProcessing
                     if (!Logics.TryClaimContainer(materialContainer)) continue;
 
                     var inventory = materialContainer.GetInventory();
-                    if (!Logics.TryRemoveItem(inventory, materialData.m_name, minMaterialCount,
-                            out var prefabName))
+                    if (!(isCharcoalKiln
+                            ? Logics.TryRemoveAllowedCharcoalKilnWood(inventory, minMaterialCount,
+                                out var prefabName)
+                            : Logics.TryRemoveItem(inventory, materialData.m_name, minMaterialCount,
+                                out prefabName)))
                         continue;
 
                     Reflections.InvokeMethod(smelter, "QueueOre", prefabName, false);
@@ -149,6 +155,7 @@ namespace Automatics.AutomaticProcessing
 
             var smelterName = smelter.m_name;
             if (!Logics.IsAllowProcessing(smelterName, Process.Craft)) return;
+            var isCharcoalKiln = smelterName == Processor.CharcoalKiln.name;
 
             if (Time.time - _lastCraftReset > 1f)
             {
@@ -205,8 +212,10 @@ namespace Automatics.AutomaticProcessing
                     if (materialContainer && productContainerFound) break;
 
                     if (materialContainer == null)
-                        if (Inventories.HaveItem(inventory, materialData.m_name,
-                                0, WorldLevelMatchMode.Ignore, minMaterialCount + 1))
+                        if (isCharcoalKiln
+                            ? Logics.HasAllowedCharcoalKilnWood(inventory, minMaterialCount)
+                            : Inventories.HaveItem(inventory, materialData.m_name, 0,
+                                WorldLevelMatchMode.Ignore, minMaterialCount + 1))
                             materialContainer = container;
 
                     if (maxProductStacks > 0 && !productContainerFound)
@@ -226,8 +235,11 @@ namespace Automatics.AutomaticProcessing
                     if (!Logics.TryClaimContainer(materialContainer)) continue;
 
                     var inventory = materialContainer.GetInventory();
-                    if (!Logics.TryRemoveItem(inventory, materialData.m_name, minMaterialCount,
-                            out var prefabName))
+                    if (!(isCharcoalKiln
+                            ? Logics.TryRemoveAllowedCharcoalKilnWood(inventory, minMaterialCount,
+                                out var prefabName)
+                            : Logics.TryRemoveItem(inventory, materialData.m_name, minMaterialCount,
+                                out prefabName)))
                         continue;
                     zNetView.InvokeRPC("RPC_AddOre", prefabName, false);
 

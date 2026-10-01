@@ -427,6 +427,21 @@ Specify the automatic processes to allow for Charcoal kiln. "Craft" produces ite
 - Acceptable values: None, Craft, Store
 - Multiple values can be set at the same time by separating them with , (e.g. Craft, Store)
 
+### Charcoal kiln: Allow Wood As Fuel / [piece_charcoalkiln_allow_wood_as_fuel]
+Specify whether Wood may be used by Charcoal kiln.
+
+- Default value: true
+
+### Charcoal kiln: Allow Fine Wood As Fuel / [piece_charcoalkiln_allow_fine_wood_as_fuel]
+Specify whether Fine Wood may be used by Charcoal kiln.
+
+- Default value: false
+
+### Charcoal kiln: Allow Core Wood As Fuel / [piece_charcoalkiln_allow_core_wood_as_fuel]
+Specify whether Core Wood may be used by Charcoal kiln.
+
+- Default value: false
+
 ### Charcoal kiln: Container Search Range / [container_search_range_by_piece_charcoalkiln]
 Specifies the maximum distance Charcoal kiln will search for containers. (Unit: meters)
 

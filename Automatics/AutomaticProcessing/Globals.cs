@@ -106,6 +106,27 @@ namespace Automatics.AutomaticProcessing
             return false;
         }
 
+        public static bool HasAllowedCharcoalKilnWood(Inventory inventory, int minCount)
+        {
+            if (inventory == null) return false;
+            return inventory.GetAllItems()
+                .Where(Config.IsAllowedCharcoalKilnWood)
+                .Sum(item => item.m_stack) > minCount;
+        }
+
+        public static bool TryRemoveAllowedCharcoalKilnWood(Inventory inventory, int minCount,
+            out string prefabName)
+        {
+            prefabName = null;
+            if (!HasAllowedCharcoalKilnWood(inventory, minCount)) return false;
+
+            foreach (var item in inventory.GetAllItems().Where(Config.IsAllowedCharcoalKilnWood))
+                if (TryRemoveItem(inventory, item, out prefabName))
+                    return true;
+
+            return false;
+        }
+
         public static bool TryRemoveItem(Inventory inventory, ItemDrop.ItemData item,
             out string prefabName)
         {

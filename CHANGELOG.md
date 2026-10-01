@@ -1,3 +1,6 @@
+#### v2.0.1 [2026-10-01]
+- Added option to choose which Wood the Charcoal Kiln is allowed to use.
+
 #### v2.0.0 [2026-10-01]
 - Updated the mod to work with Valheim release.
 - Added a deny filter for automatic pickup.

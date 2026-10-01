@@ -15,7 +15,7 @@ Automatics is a mod that automates the tedious tasks of life in Valheim. Most of
 
 > **TIP**: Each of the features described below can be completely disabled using the "Disable Module" option in the configuration.
 
-For feature-by-feature usage, see the [user guide](https://github.com/Blaatschaap84/valheim-automatics/blob/2.0.0/docs/user-guide.md).
+For feature-by-feature usage, see the [user guide](https://github.com/Blaatschaap84/valheim-automatics/blob/2.0.1/docs/user-guide.md).
 
 ### Automatic door
 
@@ -25,13 +25,13 @@ Automatically opens and closes allowed doors near the player. The open and close
 
 Automatically pins nearby dynamic objects, static objects, and locations to the map, including animals, monsters, flora, minerals, vehicles, portals, dungeons, spots, and other configured objects. You can configure search ranges, allowed targets, static pin saving, destroyed-object pin cleanup, and user-defined objects. The map navigation shortcut starts or clears navigation by holding the configured modifier key (Left Shift by default) and left-clicking a pin on the large map; while navigating, the HUD shows the target name and distance.
 
-**Custom icon pack:** You can also define your own icons in png and json files. See the [custom icon pack guide](https://github.com/Blaatschaap84/valheim-automatics/blob/2.0.0/docs/custom-icon-pack.md) for specifications.
+**Custom icon pack:** You can also define your own icons in png and json files. See the [custom icon pack guide](https://github.com/Blaatschaap84/valheim-automatics/blob/2.0.1/docs/custom-icon-pack.md) for specifications.
 
-[![Custom Icon Pack Image](https://raw.githubusercontent.com/Blaatschaap84/valheim-automatics/2.0.0/docs/images/readme/custom-icon-pack.png)](https://github.com/Blaatschaap84/valheim-automatics/blob/2.0.0/docs/custom-icon-pack.md)
+[![Custom Icon Pack Image](https://raw.githubusercontent.com/Blaatschaap84/valheim-automatics/2.0.1/docs/images/readme/custom-icon-pack.png)](https://github.com/Blaatschaap84/valheim-automatics/blob/2.0.1/docs/custom-icon-pack.md)
 
 ### Automatic processing
 
-Uses nearby allowed containers to automate supported processing tasks: supplying materials for crafting, refueling, storing produced items, and charging pieces such as Ballista. Per-piece operations, container search ranges and limits, stop thresholds, and the storage connection effect color can be changed from the configuration.
+Uses nearby allowed containers to automate supported processing tasks: supplying materials for crafting, refueling, storing produced items, and charging pieces such as Ballista. Per-piece operations, container search ranges and limits, stop thresholds, and the storage connection effect color can be changed from the configuration. For the Charcoal Kiln, you can choose whether it may consume Wood, Fine Wood, and Core Wood; only Wood is enabled by default.
 
 ### Automatic feeding
 
@@ -51,7 +51,7 @@ Stores eligible player inventory items into nearby allowed containers when the s
 
 ### Automatic pickup
 
-Automatically picks up nearby items at the configured interval when no Pickup All Nearby shortcut is assigned. If the shortcut is assigned, interacting with a pickable object while pressing it picks up matching nearby objects instead of running interval pickup.
+Automatically picks up nearby items at the configured interval when no Pickup All Nearby shortcut is assigned. If the shortcut is assigned, interacting with a pickable object while pressing it picks up matching nearby objects instead of running interval pickup. There's also a small deny list for common items to prevent unwanted build up of inventory.
 
 ### Automatic farming
 
@@ -66,23 +66,23 @@ Automatics adds console commands for command discovery, name lookup, nearby obje
 - `printobjects`: Shows nearby objects Automatics can handle.
 - `removemappins`: Removes duplicate or filtered map pins.
 
-See [Console commands](https://github.com/Blaatschaap84/valheim-automatics/blob/2.0.0/docs/user-guide.md#console-commands) in the user guide for usage and options.
+See [Console commands](https://github.com/Blaatschaap84/valheim-automatics/blob/2.0.1/docs/user-guide.md#console-commands) in the user guide for usage and options.
 
 ## Configurations
 
 I recommend using [Configuration Manager](https://github.com/BepInEx/BepInEx.ConfigurationManager).
 
-[![Configuration Menu](https://raw.githubusercontent.com/Blaatschaap84/valheim-automatics/2.0.0/docs/images/readme/config-menu-thumbnail.png)](https://raw.githubusercontent.com/Blaatschaap84/valheim-automatics/2.0.0/docs/images/readme/config-menu.jpg)
+[![Configuration Menu](https://raw.githubusercontent.com/Blaatschaap84/valheim-automatics/2.0.1/docs/images/readme/config-menu-thumbnail.png)](https://raw.githubusercontent.com/Blaatschaap84/valheim-automatics/2.0.1/docs/images/readme/config-menu.jpg)
 
-Use [CONFIG.md](https://github.com/Blaatschaap84/valheim-automatics/blob/2.0.0/CONFIG.md) for every configuration entry, default value, and accepted value range. Use the [user guide](https://github.com/Blaatschaap84/valheim-automatics/blob/2.0.0/docs/user-guide.md) for feature-by-feature usage notes.
+Use [CONFIG.md](https://github.com/Blaatschaap84/valheim-automatics/blob/2.0.1/CONFIG.md) for every configuration entry, default value, and accepted value range. Use the [user guide](https://github.com/Blaatschaap84/valheim-automatics/blob/2.0.1/docs/user-guide.md) for feature-by-feature usage notes.
 
 ### Adding object definitions to Automatics
 
 You can use the [Configuration Manager](https://github.com/BepInEx/BepInEx.ConfigurationManager) to define objects that you want Automatics to work with.
 
-[![User-defined objects in GUI](https://raw.githubusercontent.com/Blaatschaap84/valheim-automatics/2.0.0/docs/images/readme/user-defined-objects.png)](https://github.com/Blaatschaap84/valheim-automatics/blob/2.0.0/docs/add-user-defined-object.md)
+[![User-defined objects in GUI](https://raw.githubusercontent.com/Blaatschaap84/valheim-automatics/2.0.1/docs/images/readme/user-defined-objects.png)](https://github.com/Blaatschaap84/valheim-automatics/blob/2.0.1/docs/add-user-defined-object.md)
 
-Open the [user-defined objects guide](https://github.com/Blaatschaap84/valheim-automatics/blob/2.0.0/docs/add-user-defined-object.md) to learn more about adding user-defined objects.
+Open the [user-defined objects guide](https://github.com/Blaatschaap84/valheim-automatics/blob/2.0.1/docs/add-user-defined-object.md) to learn more about adding user-defined objects.
 
 ## Languages
 
@@ -104,4 +104,4 @@ Open the [user-defined objects guide](https://github.com/Blaatschaap84/valheim-a
 
 ## License
 
-Automatics is developed and released under the MIT license. For the full text of the license, see the [LICENSE](https://github.com/Blaatschaap84/valheim-automatics/blob/2.0.0/LICENSE) file.
+Automatics is developed and released under the MIT license. For the full text of the license, see the [LICENSE](https://github.com/Blaatschaap84/valheim-automatics/blob/2.0.1/LICENSE) file.

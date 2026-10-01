@@ -31,7 +31,7 @@ Automatically pins nearby dynamic objects, static objects, and locations to the 
 
 ### Automatic processing
 
-Uses nearby allowed containers to automate supported processing tasks: supplying materials for crafting, refueling, storing produced items, and charging pieces such as Ballista. Per-piece operations, container search ranges and limits, stop thresholds, and the storage connection effect color can be changed from the configuration.
+Uses nearby allowed containers to automate supported processing tasks: supplying materials for crafting, refueling, storing produced items, and charging pieces such as Ballista. Per-piece operations, container search ranges and limits, stop thresholds, and the storage connection effect color can be changed from the configuration. For the Charcoal Kiln, you can choose whether it may consume Wood, Fine Wood, and Core Wood; only Wood is enabled by default.
 
 ### Automatic feeding
 
@@ -51,7 +51,7 @@ Stores eligible player inventory items into nearby allowed containers when the s
 
 ### Automatic pickup
 
-Automatically picks up nearby items at the configured interval when no Pickup All Nearby shortcut is assigned. If the shortcut is assigned, interacting with a pickable object while pressing it picks up matching nearby objects instead of running interval pickup.
+Automatically picks up nearby items at the configured interval when no Pickup All Nearby shortcut is assigned. If the shortcut is assigned, interacting with a pickable object while pressing it picks up matching nearby objects instead of running interval pickup. There's also a small deny list for common items to prevent unwanted build up of inventory.
 
 ### Automatic farming
 

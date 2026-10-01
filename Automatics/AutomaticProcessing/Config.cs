@@ -17,6 +17,9 @@ namespace Automatics.AutomaticProcessing
         private static ConfigEntry<bool> _enableAutomaticProcessing;
         private static ConfigEntry<string> _storageConnectionEffectColor;
         private static ConfigEntry<StringList> _allowContainer;
+        private static ConfigEntry<bool> _allowWoodAsFuel;
+        private static ConfigEntry<bool> _allowFineWoodAsFuel;
+        private static ConfigEntry<bool> _allowCoreWoodAsFuel;
         private static Dictionary<string, ConfigEntry<Process>> _allowProcessing;
         private static Dictionary<string, ConfigEntry<int>> _containerSearchRange;
         private static Dictionary<string, ConfigEntry<int>> _containerReferenceLimit;
@@ -43,6 +46,21 @@ namespace Automatics.AutomaticProcessing
         }
 
         public static StringList AllowContainer => _allowContainer.Value;
+        public static bool IsAllowedCharcoalKilnWood(ItemDrop.ItemData item)
+        {
+            var prefabName = item?.m_dropPrefab?.name;
+            switch (prefabName)
+            {
+                case "Wood":
+                    return _allowWoodAsFuel.Value;
+                case "FineWood":
+                    return _allowFineWoodAsFuel.Value;
+                case "RoundLog":
+                    return _allowCoreWoodAsFuel.Value;
+                default:
+                    return false;
+            }
+        }
 
         public static Process AllowProcessing(string processor)
         {
@@ -160,6 +178,21 @@ namespace Automatics.AutomaticProcessing
                 _allowProcessing[processorName] =
                     config.Bind(key, defaultAllowedProcesses, new AcceptableProcess(processes),
                         Initializer("allow_processing_by", displayName));
+
+                if (processorName == Processor.CharcoalKiln.name)
+                {
+                    key = $"{rawName}_allow_wood_as_fuel";
+                    _allowWoodAsFuel = config.Bind(key, true,
+                        initializer: Initializer("allow_wood_as_fuel", displayName));
+
+                    key = $"{rawName}_allow_fine_wood_as_fuel";
+                    _allowFineWoodAsFuel = config.Bind(key, false,
+                        initializer: Initializer("allow_fine_wood_as_fuel", displayName));
+
+                    key = $"{rawName}_allow_core_wood_as_fuel";
+                    _allowCoreWoodAsFuel = config.Bind(key, false,
+                        initializer: Initializer("allow_core_wood_as_fuel", displayName));
+                }
 
                 key = $"container_search_range_by_{rawName}";
                 _containerSearchRange[processorName] =

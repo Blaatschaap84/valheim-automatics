@@ -11,7 +11,7 @@
     <AssemblyName>Automatics</AssemblyName>
     <TargetFramework>net48</TargetFramework>
     <FileAlignment>512</FileAlignment>
-    <Version>2.0.0</Version>
+    <Version>2.0.1</Version>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>

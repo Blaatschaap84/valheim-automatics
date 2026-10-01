@@ -210,6 +210,9 @@ Common settings:
 | `Allow Container` | Selects which container definitions Automatics may use. Private chests are excluded by default. |
 | `Storage Connection Effect Color` | Sets the color of the container connection effect shown while hovering supported processors. |
 | `<piece>: Allow Process` | Selects which available process types are enabled for that piece. |
+| `Charcoal Kiln: Allow Wood As Fuel` | Allows the Charcoal Kiln to consume Wood. Enabled by default. |
+| `Charcoal Kiln: Allow Fine Wood As Fuel` | Allows the Charcoal Kiln to consume Fine Wood. Disabled by default. |
+| `Charcoal Kiln: Allow Core Wood As Fuel` | Allows the Charcoal Kiln to consume Core Wood. Disabled by default. |
 | `<piece>: Container Search Range` | Controls how far that piece searches for containers. |
 | `<piece>: Container Reference Limit` | Limits how many nearby containers are checked. `0` means unlimited. |
 | `<piece>: Number Of Materials To Stop Supplying` | Keeps at least that many material items in containers before stopping supply. |
