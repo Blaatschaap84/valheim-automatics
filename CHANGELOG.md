@@ -1,3 +1,7 @@
+#### v2.0.0 [2026-10-01]
+- Updated the mod to work with Valheim release.
+- Added a deny filter for automatic pickup.
+
 #### v1.7.0 [2026-07-19]
 - Added Automatic Storage for moving eligible inventory items into nearby containers by hotkey.
 - Added Automatic Farming for harvesting, replanting, sowing, seed reserves, and role-based container workflows.
