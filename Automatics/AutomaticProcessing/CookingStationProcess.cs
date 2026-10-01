@@ -102,7 +102,7 @@ namespace Automatics.AutomaticProcessing
                     if (!Logics.TryRemoveItem(inventory, materialData.m_name, minMaterialCount,
                             out var prefabName))
                         continue;
-                    zNetView.InvokeRPC("RPC_AddItem", prefabName);
+                    zNetView.InvokeRPC("RPC_AddItem", prefabName, false);
 
                     Logics.CraftingLog(materialData.m_name, 1,
                         materialContainer.m_name, materialContainer.transform.position, stationName,

@@ -49,7 +49,8 @@ namespace Automatics.AutomaticPickup
                 if (Config.PickupAllNearbyKey.MainKey == KeyCode.None)
                 {
                     PickupAllNearby(_player,
-                        (Pickable x) => !AutomaticFarming.AutomaticFarming.ClaimsCrop(_player, x));
+                        (Pickable x) => !AutomaticFarming.AutomaticFarming.ClaimsCrop(_player, x) &&
+                                        !Config.IsPickupDenied(GetPickableName(x)));
                     yield return null;
                     PickupAllNearby(_player, (PickableItem x) => true);
                     yield return null;
@@ -128,7 +129,7 @@ namespace Automatics.AutomaticPickup
 
         private static string GetPickableName(Pickable pickable)
         {
-            return pickable.GetHoverName();
+            return Objects.GetPrefabName(pickable.gameObject);
         }
 
         private static string GetPickableItemName(PickableItem pickableItem)

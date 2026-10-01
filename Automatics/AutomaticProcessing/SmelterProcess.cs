@@ -118,7 +118,7 @@ namespace Automatics.AutomaticProcessing
                             out var prefabName))
                         continue;
 
-                    Reflections.InvokeMethod(smelter, "QueueOre", prefabName);
+                    Reflections.InvokeMethod(smelter, "QueueOre", prefabName, false);
 
                     Logics.CraftingLog(materialData.m_name, 1,
                         materialContainer.m_name, materialContainer.transform.position, smelterName,
@@ -229,7 +229,7 @@ namespace Automatics.AutomaticProcessing
                     if (!Logics.TryRemoveItem(inventory, materialData.m_name, minMaterialCount,
                             out var prefabName))
                         continue;
-                    zNetView.InvokeRPC("RPC_AddOre", prefabName);
+                    zNetView.InvokeRPC("RPC_AddOre", prefabName, false);
 
                     Logics.CraftingLog(materialData.m_name, 1,
                         materialContainer.m_name, materialContainer.transform.position, smelterName,
