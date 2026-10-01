@@ -7,6 +7,10 @@ Automatics is a mod that automates the tedious tasks of life in Valheim. Most of
 > - This mod has been developed by an individual and is not associated with the game's developer in any way. Please refrain from asking the developer any questions regarding this mod.
 > - This mod has been developed with the sole intention of single-player usage. Please be aware that it is not supported for server operation, and we kindly request your understanding in this matter.
 
+# Also important
+
+> This mod has been forked by another individual not associated game's developer nor eideehi. I used AI to update the mod to work with Valheim release and to make some other changes I find useful.
+
 ## Features
 
 > **TIP**: Each of the features described below can be completely disabled using the "Disable Module" option in the configuration.
