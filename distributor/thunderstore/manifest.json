@@ -4,6 +4,6 @@
   "version_number": "2.0.0",
   "website_url": "https://github.com/Blaatschaap84/valheim-automatics",
   "dependencies": [
-    "denikson-BepInExPack_Valheim-5.4.2200"
+    "denikson-BepInExPack_Valheim-5.4.2350"
   ]
 }
