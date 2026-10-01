@@ -1,15 +1,21 @@
 # Automatics - Valheim Mod
+
 Automatics is a mod that automates the tedious tasks of life in Valheim. Most of its features exist in existing mods, but it has been re-designed to make it easier for me to use.
 
-> **IMPORTANT**:
+> **IMPORTANT**
+>
 > - This mod has been developed by an individual and is not associated with the game's developer in any way. Please refrain from asking the developer any questions regarding this mod.
 > - This mod has been developed with the sole intention of single-player usage. Please be aware that it is not supported for server operation, and we kindly request your understanding in this matter.
+
+# Also important
+
+> This mod has been forked by another individual not associated game's developer nor eideehi. I used AI to update the mod to work with Valheim release and to make some other changes I find useful.
 
 ## Features
 
 > **TIP**: Each of the features described below can be completely disabled using the "Disable Module" option in the configuration.
 
-For released feature documentation, see [docs/user-guide.md](https://github.com/eideehi/valheim-automatics/blob/1.7.0/docs/user-guide.md).
+For feature-by-feature usage, see [docs/user-guide.md](docs/user-guide.md).
 
 ### Automatic door
 
@@ -19,9 +25,9 @@ Automatically opens and closes allowed doors near the player. The open and close
 
 Automatically pins nearby dynamic objects, static objects, and locations to the map, including animals, monsters, flora, minerals, vehicles, portals, dungeons, spots, and other configured objects. You can configure search ranges, allowed targets, static pin saving, destroyed-object pin cleanup, and user-defined objects. The map navigation shortcut starts or clears navigation by holding the configured modifier key (Left Shift by default) and left-clicking a pin on the large map; while navigating, the HUD shows the target name and distance.
 
-- **Custom icon pack**: You can also define your own icons in png and json files. See [docs/custom-icon-pack.md](https://github.com/eideehi/valheim-automatics/blob/1.7.0/docs/custom-icon-pack.md) for custom icon pack specifications.
+**Custom icon pack:** You can also define your own icons in png and json files. See [docs/custom-icon-pack.md](docs/custom-icon-pack.md) for custom icon pack specifications.
 
-![Custom Icon Pack Image](https://app.box.com/shared/static/ggj61oyrdik1jk08lohdqr91e1q5isqv.png)
+[![Custom Icon Pack Image](docs/images/readme/custom-icon-pack.png)](docs/custom-icon-pack.md)
 
 ### Automatic processing
 
@@ -49,7 +55,7 @@ Automatically picks up nearby items at the configured interval when no Pickup Al
 
 ### Automatic farming
 
-Harvests grown crops around the player and replants the regrowing sapling at each harvested spot, keeping a configurable reserve of every planting input. It can also sow into nearby empty cultivated ground on a spacing grid so the saplings settle healthy. Planting can draw from the player inventory, or from containers you designate by role — cultivation boxes to grow crops, seed-harvest boxes to multiply seeds, and storage boxes to receive the yield. Farming can run at the configured interval or only when the farming shortcut is pressed. While farming is active, Automatic pickup leaves allowlisted crops for farming to harvest and replant.
+Harvests grown crops around the player and replants the regrowing sapling at each harvested spot, keeping a configurable reserve of every planting input. It can also sow into nearby empty cultivated ground on a spacing grid so the saplings settle healthy. Planting can draw from the player inventory, or from containers you designate by role — cultivation boxes to grow crops, seed-harvest boxes to multiply seeds, and storage boxes to receive the yield — so whole fields can run from chests without ever planting the wrong stock. Farming can run at the configured interval or only when the farming shortcut is pressed. While farming is active, Automatic pickup leaves allowlisted crops for farming to harvest and replant.
 
 ## Console commands
 
@@ -60,30 +66,30 @@ Automatics adds console commands for command discovery, name lookup, nearby obje
 - `printobjects`: Shows nearby objects Automatics can handle.
 - `removemappins`: Removes duplicate or filtered map pins.
 
-See [Console commands](https://github.com/eideehi/valheim-automatics/blob/1.7.0/docs/user-guide.md#console-commands) in the released documentation for usage and options.
+See [Console commands](docs/user-guide.md#console-commands) in the user guide for usage and options.
 
 ## Configurations
 
 I recommend using [Configuration Manager](https://github.com/BepInEx/BepInEx.ConfigurationManager).
 
-![Configuration Menu](https://app.box.com/shared/static/3v57rjpauzzyv0xeugohnw8bn2ye3q2h.png)
+[![Configuration Menu](docs/images/readme/config-menu-thumbnail.png)](docs/images/readme/config-menu.jpg)
 
-Use [CONFIG.md](https://github.com/eideehi/valheim-automatics/blob/1.7.0/CONFIG.md) for every configuration entry, default value, and accepted value range. Use [docs/user-guide.md](https://github.com/eideehi/valheim-automatics/blob/1.7.0/docs/user-guide.md) for feature-by-feature usage notes.
+Use [CONFIG.md](CONFIG.md) for every configuration entry, default value, and accepted value range. Use [docs/user-guide.md](docs/user-guide.md) for feature-by-feature usage notes.
 
 ### Adding object definitions to Automatics
 
 You can use the [Configuration Manager](https://github.com/BepInEx/BepInEx.ConfigurationManager) to define objects that you want Automatics to work with.
 
-![User-defined objects in GUI](https://app.box.com/shared/static/5f6dvpg1elczu9froqkepxamv03ci9cd.png)
+[![User-defined objects in GUI](docs/images/readme/user-defined-objects.png)](docs/add-user-defined-object.md)
 
-Open [docs/add-user-defined-object.md](https://github.com/eideehi/valheim-automatics/blob/1.7.0/docs/add-user-defined-object.md) to learn more about adding user-defined objects.
+Open [docs/add-user-defined-object.md](docs/add-user-defined-object.md) to learn more about adding user-defined objects.
 
 ## Languages
 
-| Language | Translators       | Status |
-|----------|-------------------|--------|
-| English  | Translation Tools | 100%   |
-| Japanese | EideeHi           | 100%   |
+| Language | Translators | Status |
+| --- | --- | --- |
+| English | Translation Tools | 100% |
+| Japanese | EideeHi | 100% |
 
 ## Contacts
 
@@ -98,4 +104,4 @@ Open [docs/add-user-defined-object.md](https://github.com/eideehi/valheim-automa
 
 ## License
 
-Automatics is developed and released under the MIT license. For the full text of the license, please see the [LICENSE](https://github.com/eideehi/valheim-automatics/blob/1.7.0/LICENSE) file.
+Automatics is developed and released under the MIT license. For the full text of the license, please see the [LICENSE](LICENSE) file.
