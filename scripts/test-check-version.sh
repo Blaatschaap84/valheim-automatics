@@ -57,7 +57,7 @@ cat >"$fixture/CHANGELOG.md" <<'EOF'
 EOF
 
 cat >"$fixture/distributor/thunderstore/README.md" <<'EOF'
-See [the user guide](https://github.com/eideehi/valheim-automatics/blob/1.6.0/docs/user-guide.md).
+See [the user guide](https://github.com/Blaatschaap84/valheim-automatics/blob/1.6.0/docs/user-guide.md).
 EOF
 
 cat >"$fixture/docs/user-guide.md" <<'EOF'

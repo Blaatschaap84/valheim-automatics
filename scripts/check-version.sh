@@ -77,9 +77,9 @@ check_thunderstore_links() {
         fi
     done < <(
         {
-            (grep -Eo 'github\.com/eideehi/valheim-automatics/blob/[^)[:space:]]+' "$repo_root/$thunderstore_readme" || true) \
+            (grep -Eo 'github\.com/Blaatschaap84/valheim-automatics/blob/[^)[:space:]]+' "$repo_root/$thunderstore_readme" || true) \
                 | sed -E 's|^.*blob/||'
-            (grep -Eo 'raw\.githubusercontent\.com/eideehi/valheim-automatics/[^)[:space:]]+' "$repo_root/$thunderstore_readme" || true) \
+            (grep -Eo 'raw\.githubusercontent\.com/Blaatschaap84/valheim-automatics/[^)[:space:]]+' "$repo_root/$thunderstore_readme" || true) \
                 | sed -E 's|^.*valheim-automatics/||'
         } | sed -E 's/[?#].*$//' | sort -u
     )
@@ -135,7 +135,7 @@ if [[ "$changelog_version" != "$latest_release_tag" ]]; then
     exit 1
 fi
 
-if grep -Eq 'github\.com/eideehi/valheim-automatics/blob/(main|master)/|raw\.githubusercontent\.com/eideehi/valheim-automatics/(main|master)/' "$repo_root/$thunderstore_readme"; then
+if grep -Eq 'github\.com/Blaatschaap84/valheim-automatics/blob/(main|master)/|raw\.githubusercontent\.com/Blaatschaap84/valheim-automatics/(main|master)/' "$repo_root/$thunderstore_readme"; then
     echo "error: Thunderstore README contains main/master links instead of release tag links" >&2
     exit 1
 fi
